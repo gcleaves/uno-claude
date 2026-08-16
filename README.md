@@ -43,7 +43,7 @@ npm run typecheck
 | `shared/` | The rules engine and the types both sides share. No I/O, fully testable. |
 | `server/` | Express + Socket.IO gateway, room store, auth adapter.                   |
 | `client/` | React + Vite UI, including the SVG card renderer.                        |
-| `scripts/`| `bot.ts`, an auto-playing client for filling a table while testing.      |
+| `scripts/`| `bot.ts` fills a table with auto-playing opponents; `smoke.ts` plays a full round against a deployment. |
 
 The engine in `shared/src/engine.ts` is a pure state machine: `applyAction(state,
 playerId, action, rng)` validates and applies one move. The server owns the only
@@ -116,20 +116,72 @@ issuer so the client can configure itself at runtime.
 | `AFK_TURN_SEC`        | `20`    | How long before an offline player's turn is auto-played.|
 | `EMPTY_ROOM_TTL_MIN`  | `15`    | How long an empty room lingers before being reclaimed. |
 
-## Deploying
+## Deploying with Docker
 
 ```bash
-npm run build
+docker compose up -d --build
 ```
+
+That is the whole deployment. The image builds the client, installs production
+dependencies only, and serves the static files and the WebSocket from a single
+process on port 3001 — so there is no CORS to configure and no second service to
+run.
+
+Copy `.env.example` to `.env` to change anything; compose reads it automatically.
+To publish on a different port:
 
 ```bash
-npm start
+UNO_PORT=8080 docker compose up -d
 ```
 
-The server serves the built client from the same origin, so one process on one
-port is all you need. Game state is in memory: restarting the server ends any
-games in progress, and you cannot run more than one instance without adding a
-shared store.
+Confirm a deployment actually works — not just that it answers `/healthz`, but
+that the socket path works end to end. This seats three clients and plays a full
+round against the running server:
+
+```bash
+npm run smoke -- http://localhost:3001
+```
+
+The image runs as the unprivileged `node` user with a read-only root filesystem
+and `no-new-privileges`. `/tmp` is a tmpfs because the server runs TypeScript
+through `tsx`, which caches compiled output there.
+
+### Behind a reverse proxy
+
+Uno needs the WebSocket upgrade to reach the container. With nginx:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3001;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 3600s;
+}
+```
+
+Without the `Upgrade`/`Connection` headers, Socket.IO silently falls back to HTTP
+long-polling — the game still works, but every move costs a round trip.
+
+### What this deployment cannot do
+
+Game state lives in memory. Restarting the container ends any game in progress,
+and you cannot run more than one replica without adding a shared store — two
+replicas would each hold different rooms, and players would land on whichever one
+the load balancer picked. For a game among friends this is usually the right
+trade; if you outgrow it, the room store in `server/src/rooms.ts` is the single
+place that would need to move to Redis.
+
+### Without Docker
+
+```bash
+npm run build && npm start
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 ## About the artwork
 

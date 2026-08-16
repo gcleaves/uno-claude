@@ -1,0 +1,44 @@
+services:
+  uno:
+    build: .
+    image: uno-claude
+    restart: unless-stopped
+    ports:
+      # Publish somewhere else with UNO_PORT=8080 docker compose up -d.
+      - "${UNO_PORT:-3001}:3001"
+    environment:
+      # --- authentication -------------------------------------------------
+      # 'guest' lets anyone with a room code play. Switch to 'keycloak' and
+      # fill in the two variables below to require a signed-in account.
+      AUTH_MODE: ${AUTH_MODE:-guest}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-}
+
+      # --- networking -----------------------------------------------------
+      # The client is served from the same origin as the socket, so the default
+      # needs no CORS. Set this if you serve the UI from somewhere else.
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+
+      # --- game timing ----------------------------------------------------
+      RECONNECT_GRACE_SEC: ${RECONNECT_GRACE_SEC:-120}
+      AFK_TURN_SEC: ${AFK_TURN_SEC:-20}
+      EMPTY_ROOM_TTL_MIN: ${EMPTY_ROOM_TTL_MIN:-15}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    # Games live in memory only, so the container needs no volumes — but it also
+    # means a restart ends any game in progress.
+    read_only: true
+    tmpfs:
+      # tsx compiles TypeScript to a cache under /tmp, which a read-only root
+      # filesystem would otherwise deny.
+      - /tmp
+    security_opt:
+      - no-new-privileges:true

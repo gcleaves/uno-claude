@@ -2,6 +2,7 @@
   "name": "uno-claude",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "workspaces": [
     "shared",
@@ -15,7 +16,8 @@
     "build": "npm run build --workspace client",
     "start": "npm run start --workspace server",
     "typecheck": "tsc -p shared && tsc -p server && tsc -p client",
-    "test": "node --import tsx --test shared/test/*.test.ts"
+    "test": "node --import tsx --test shared/test/*.test.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
