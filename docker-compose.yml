@@ -26,6 +26,13 @@ services:
       FORCED_ACTION_SEC: ${FORCED_ACTION_SEC:-5}
       TURN_TIMEOUT_SEC: ${TURN_TIMEOUT_SEC:-45}
       AFK_TURN_SEC: ${AFK_TURN_SEC:-20}
+
+      # --- surviving restarts ---------------------------------------------
+      # Games are snapshotted to the volume below and restored on boot, so a
+      # redeploy does not end them. Set SNAPSHOT_PATH empty to turn this off.
+      SNAPSHOT_PATH: ${SNAPSHOT_PATH-/data/rooms.json}
+      SNAPSHOT_INTERVAL_SEC: ${SNAPSHOT_INTERVAL_SEC:-10}
+      RESUME_GRACE_SEC: ${RESUME_GRACE_SEC:-30}
       EMPTY_ROOM_TTL_MIN: ${EMPTY_ROOM_TTL_MIN:-15}
     healthcheck:
       test:
@@ -37,8 +44,10 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
-    # Games live in memory only, so the container needs no volumes — but it also
-    # means a restart ends any game in progress.
+    volumes:
+      # Holds the game snapshot. Without it, games survive a process restart but
+      # not the container being recreated.
+      - uno-data:/data
     read_only: true
     tmpfs:
       # tsx compiles TypeScript to a cache under /tmp, which a read-only root
@@ -46,3 +55,8 @@ services:
       - /tmp
     security_opt:
       - no-new-privileges:true
+    # Give the process a moment to write its final snapshot before SIGKILL.
+    stop_grace_period: 15s
+
+volumes:
+  uno-data:

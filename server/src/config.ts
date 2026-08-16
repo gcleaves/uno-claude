@@ -32,4 +32,20 @@ export const config = {
   afkTurnSec: Number(process.env.AFK_TURN_SEC ?? 20),
   /** Minutes an empty room lingers before being reclaimed. */
   emptyRoomTtlMin: Number(process.env.EMPTY_ROOM_TTL_MIN ?? 15),
+
+  /*
+   * Games live in memory, so a restart would normally end them. Snapshotting
+   * lets a redeploy pass without anyone losing their hand.
+   */
+
+  /** Where to write the snapshot. Empty string turns persistence off. */
+  snapshotPath: process.env.SNAPSHOT_PATH ?? './data/rooms.json',
+  /** How often to snapshot in the background, bounding loss on a hard crash. */
+  snapshotIntervalSec: Number(process.env.SNAPSHOT_INTERVAL_SEC ?? 10),
+  /**
+   * After restoring, hold every turn clock for this long. Sockets do not
+   * survive a restart, so without it the first player back would be forfeited
+   * for being "away" while their phone was still reconnecting.
+   */
+  resumeGraceSec: Number(process.env.RESUME_GRACE_SEC ?? 30),
 };

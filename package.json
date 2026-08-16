@@ -17,7 +17,8 @@
     "start": "npm run start --workspace server",
     "typecheck": "tsc -p shared && tsc -p server && tsc -p client",
     "test": "node --import tsx --test shared/test/*.test.ts server/test/*.test.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "restart-check": "tsx scripts/restart-check.ts"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

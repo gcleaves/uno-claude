@@ -15,6 +15,7 @@ import {
   type Rng,
 } from '@uno/shared';
 import { config } from './config.js';
+import type { PersistedRoom } from './persistence.js';
 
 /** Unambiguous alphabet: no O/0, I/1, etc. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -36,12 +37,19 @@ export interface Room {
    */
   turnKey: string;
   lastActivity: number;
+  /**
+   * After a restore, no turn clock runs until this passes. Sockets do not
+   * survive a restart, so everyone looks "away" for a moment and would
+   * otherwise be forfeited while their phone is still reconnecting.
+   */
+  resumeUntil: number | null;
 }
 
 const rng: Rng = () => randomInt(0, 2 ** 31) / 2 ** 31;
 
 export class RoomStore {
   private rooms = new Map<string, Room>();
+  private changedSinceSnapshot = false;
   /** Called whenever a room's state changes so the gateway can broadcast. */
   onChange: (code: string) => void = () => {};
 
@@ -60,6 +68,7 @@ export class RoomStore {
       turnTotalMs: null,
       turnKey: '',
       lastActivity: Date.now(),
+      resumeUntil: null,
     };
     this.rooms.set(code, room);
     return room;
@@ -151,6 +160,7 @@ export class RoomStore {
   }
 
   private touch(room: Room): void {
+    this.changedSinceSnapshot = true;
     this.onChange(room.state.code);
   }
 
@@ -199,6 +209,69 @@ export class RoomStore {
       players: [...this.rooms.values()].reduce((n, r) => n + r.state.players.length, 0),
     };
   }
+
+  /* ---------------------------------------------------------------- *
+   * Surviving a restart
+   * ---------------------------------------------------------------- */
+
+  /** True when something has changed since the last snapshot. */
+  get dirty(): boolean {
+    return this.changedSinceSnapshot;
+  }
+
+  /** Rooms worth saving: occupied, and not already abandoned. */
+  export(now = Date.now()): PersistedRoom[] {
+    const out: PersistedRoom[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.state.players.length === 0) continue;
+      if (now - room.lastActivity > config.emptyRoomTtlMin * 60_000) continue;
+      out.push({
+        state: room.state,
+        seats: [...room.seats],
+        droppedAt: [...room.droppedAt],
+        lastActivity: room.lastActivity,
+      });
+    }
+    this.changedSinceSnapshot = false;
+    return out;
+  }
+
+  /**
+   * Rebuild rooms from a snapshot. Everyone comes back marked offline — their
+   * sockets died with the old process — and holding their seat from now, so the
+   * reconnect grace is measured from the restart rather than from whenever the
+   * snapshot happened to be written.
+   */
+  restore(saved: PersistedRoom[], now = Date.now()): number {
+    let count = 0;
+    for (const entry of saved) {
+      const code = entry.state.code?.toUpperCase();
+      if (!code || this.rooms.has(code)) continue;
+
+      const state = entry.state;
+      const droppedAt = new Map<string, number>();
+      for (const player of state.players) {
+        player.connected = false;
+        droppedAt.set(player.id, now);
+      }
+
+      this.rooms.set(code, {
+        state,
+        seats: new Map(entry.seats),
+        droppedAt,
+        // A stale deadline from before the restart must not carry over.
+        turnDeadline: null,
+        turnTotalMs: null,
+        turnKey: '',
+        lastActivity: now,
+        resumeUntil: config.resumeGraceSec > 0 ? now + config.resumeGraceSec * 1000 : null,
+      });
+      logEvent(state, 'Server restarted — the game picks up where it left off.');
+      count++;
+    }
+    this.changedSinceSnapshot = true;
+    return count;
+  }
 }
 
 /**
@@ -227,6 +300,19 @@ export function turnBudgetMs(state: GameState): number {
  */
 function syncClock(room: Room, now: number): boolean {
   const state = room.state;
+
+  // Just restarted: give everyone a chance to reconnect before any clock runs.
+  if (room.resumeUntil !== null) {
+    if (now < room.resumeUntil) {
+      const wasRunning = room.turnDeadline !== null;
+      room.turnDeadline = null;
+      room.turnTotalMs = null;
+      room.turnKey = '';
+      return wasRunning;
+    }
+    room.resumeUntil = null;
+  }
+
   const budget = turnBudgetMs(state);
 
   if (budget === 0) {

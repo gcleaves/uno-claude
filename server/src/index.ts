@@ -7,6 +7,7 @@ import type { Action, ActionResult } from '@uno/shared';
 import { config } from './config.js';
 import { resolveIdentity, sanitizeName, type Identity } from './auth.js';
 import { RoomStore } from './rooms.js';
+import { loadSnapshot, saveSnapshot, saveSnapshotSync } from './persistence.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(here, '../../client/dist');
@@ -161,6 +162,61 @@ io.on('connection', (socket: Socket) => {
 // Ticks fast enough that a five-second turn clock is not visibly coarse.
 setInterval(() => rooms.sweep(), 500).unref();
 
+/* ------------------------------------------------------------------ *
+ * Surviving a restart
+ * ------------------------------------------------------------------ */
+
+const persistenceOn = config.snapshotPath.trim().length > 0;
+
+if (persistenceOn) {
+  const snapshot = loadSnapshot(config.snapshotPath);
+  if (snapshot) {
+    const restored = rooms.restore(snapshot.rooms);
+    const age = Math.round((Date.now() - snapshot.savedAt) / 1000);
+    console.log(`restored ${restored} room(s) from a snapshot ${age}s old`);
+  }
+
+  if (config.snapshotIntervalSec > 0) {
+    setInterval(() => {
+      if (!rooms.dirty) return;
+      void saveSnapshot(config.snapshotPath, rooms.export()).catch((err) =>
+        console.warn('snapshot failed:', err),
+      );
+    }, config.snapshotIntervalSec * 1000).unref();
+  }
+}
+
+let shuttingDown = false;
+
+function shutdown(signal: string): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  if (persistenceOn) {
+    try {
+      // Synchronous: the process is about to exit, so an awaited write may
+      // never land. This is the save that makes a planned restart seamless.
+      const saved = rooms.export();
+      saveSnapshotSync(config.snapshotPath, saved);
+      console.log(`${signal}: saved ${saved.length} room(s)`);
+    } catch (err) {
+      console.error('could not save rooms on shutdown:', err);
+    }
+  }
+
+  io.close();
+  http.close(() => process.exit(0));
+  // Sockets keep the server open; do not hang a deploy waiting for them.
+  setTimeout(() => process.exit(0), 3000).unref();
+}
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => shutdown(signal));
+}
+
 http.listen(config.port, () => {
-  console.log(`uno server listening on :${config.port} (auth: ${config.authMode})`);
+  console.log(
+    `uno server listening on :${config.port} (auth: ${config.authMode}` +
+      `${persistenceOn ? `, snapshots: ${config.snapshotPath}` : ', snapshots: off'})`,
+  );
 });

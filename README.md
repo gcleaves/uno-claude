@@ -43,7 +43,7 @@ npm run typecheck
 | `shared/` | The rules engine and the types both sides share. No I/O, fully testable. |
 | `server/` | Express + Socket.IO gateway, room store, auth adapter.                   |
 | `client/` | React + Vite UI, including the SVG card renderer.                        |
-| `scripts/`| `bot.ts` fills a table with auto-playing opponents; `smoke.ts` plays a full round against a deployment. |
+| `scripts/`| `bot.ts` fills a table with auto-playing opponents; `smoke.ts` plays a full round against a deployment; `restart-check.ts` proves a game survives a restart. |
 
 The engine in `shared/src/engine.ts` is a pure state machine: `applyAction(state,
 playerId, action, rng)` validates and applies one move. The server owns the only
@@ -117,6 +117,9 @@ issuer so the client can configure itself at runtime.
 | `TURN_TIMEOUT_SEC`    | `45`    | Turn clock when the player has a real choice.          |
 | `AFK_TURN_SEC`        | `20`    | Turn clock when the player is disconnected.            |
 | `EMPTY_ROOM_TTL_MIN`  | `15`    | How long an empty room lingers before being reclaimed. |
+| `SNAPSHOT_PATH`       | `/data/rooms.json` | Where games are saved. Empty disables persistence. |
+| `SNAPSHOT_INTERVAL_SEC` | `10`  | Background save interval; bounds loss on a crash.      |
+| `RESUME_GRACE_SEC`    | `30`    | Turn clocks are held this long after a restart.        |
 
 ## The turn clock
 
@@ -192,14 +195,48 @@ location / {
 Without the `Upgrade`/`Connection` headers, Socket.IO silently falls back to HTTP
 long-polling — the game still works, but every move costs a round trip.
 
+### Surviving restarts
+
+Games are held in memory, but they are snapshotted to `/data/rooms.json` (a
+docker volume) and restored on boot, so a redeploy does not end anyone's game.
+Players' browsers reconnect and re-take their seats automatically — from their
+side a restart looks like a couple of seconds offline.
+
+Two saves cover the two ways a server goes away:
+
+- **On `SIGTERM`**, written synchronously before exit. This is the one that makes
+  a planned restart seamless, and why compose sets `stop_grace_period: 15s`.
+- **Every 10 seconds** in the background, so a crash or `kill -9` loses at most
+  that much play rather than the whole game.
+
+The file is written to a temporary name and renamed into place, so a crash
+mid-write leaves the last good snapshot rather than a truncated one. A snapshot
+that is corrupt, or written by a different version, is ignored and the server
+starts empty — losing games is bad, refusing to boot is worse.
+
+After restoring, all turn clocks are held for `RESUME_GRACE_SEC` (30s). Sockets
+do not survive a restart, so without it the first player back would be forfeited
+for being "away" while their phone was still reconnecting.
+
+Verify it end to end — this deals a hand, restarts the server underneath the
+players, and checks everyone gets their own cards back and can still play:
+
+```bash
+npm run restart-check -- "docker compose restart" http://localhost:3001
+```
+
+Set `SNAPSHOT_PATH=` (empty) to turn persistence off.
+
+The snapshot contains every player's hand, so it is written `0600`. Keep the
+volume as private as you would any other game state.
+
 ### What this deployment cannot do
 
-Game state lives in memory. Restarting the container ends any game in progress,
-and you cannot run more than one replica without adding a shared store — two
-replicas would each hold different rooms, and players would land on whichever one
-the load balancer picked. For a game among friends this is usually the right
-trade; if you outgrow it, the room store in `server/src/rooms.ts` is the single
-place that would need to move to Redis.
+You cannot run more than one replica. Two would each hold different rooms, and
+players would land on whichever one the load balancer picked. For a game among
+friends this is usually the right trade; if you outgrow it, `server/src/rooms.ts`
+is the single place that would need to move to Redis — the snapshot format there
+is already a clean serialisation boundary.
 
 ### Without Docker
 

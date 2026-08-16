@@ -43,7 +43,13 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
-    UNO_SERVER_PORT=3001
+    UNO_SERVER_PORT=3001 \
+    SNAPSHOT_PATH=/data/rooms.json
+
+# Games are snapshotted here so a restart does not end them. Mount a volume at
+# /data to make that survive the container itself, not just the process.
+RUN mkdir -p /data && chown node:node /data
+VOLUME ["/data"]
 
 # `node` (uid 1000) ships with the base image; run as it rather than root.
 COPY --from=deps  --chown=node:node /app/node_modules ./node_modules
