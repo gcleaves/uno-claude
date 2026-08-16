@@ -52,7 +52,12 @@ socket.on('connect_error', (e) => console.error(`${name}: ${e.message}`));
 
 function takeTurn(view: GameView) {
   const hand = view.you.hand;
-  const playableId = view.you.playable[0];
+  // BOT_BLUFF=1 makes it lead with Wild Draw Four whenever it can, which is how
+  // you get a challengeable play on demand while testing.
+  const bluff = process.env.BOT_BLUFF
+    ? view.you.playable.find((id) => hand.find((c) => c.id === id)?.kind === 'wild4')
+    : undefined;
+  const playableId = bluff ?? view.you.playable[0];
 
   if (!playableId) {
     socket.emit('game:action', { type: view.hasDrawn ? 'pass' : 'draw' });

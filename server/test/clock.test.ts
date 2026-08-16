@@ -93,11 +93,36 @@ test('being made to draw a penalty uses the short clock', () => {
   );
   room.state.pendingDraw = 4;
   room.state.pendingDrawKind = 'wild4';
-  // Nothing to stack with, so drawing is the only move.
+  // No wild4 on record, so there is nothing to challenge and drawing is the
+  // only move left.
+  room.state.wild4 = null;
   assert.deepEqual(legalPlays(room.state, current(room.state)), []);
   assert.equal(turnBudgetMs(room.state), FORCED);
   arm(500);
   assert.equal(room.turnDeadline, 500 + FORCED);
+});
+
+test('facing a challengeable +4 earns the long clock, not the forced one', () => {
+  // Regression: deciding whether to call a bluff is a real choice. Treating it
+  // as a formality gave five seconds and the server drew before you could act.
+  const { room, store, setBoard, arm } = table();
+  setBoard(
+    { a: [card('a1', 'number', 'red', 3)], b: [card('b1', 'number', 'blue', 1)] },
+    card('t', 'number', 'red', 5),
+    'red',
+  );
+  room.state.pendingDraw = 4;
+  room.state.pendingDrawKind = 'wild4';
+  room.state.wild4 = { playerId: 'b', legal: false };
+
+  assert.deepEqual(legalPlays(room.state, current(room.state)), [], 'nothing to stack');
+  assert.equal(turnBudgetMs(room.state), CHOICE);
+
+  const t0 = 6_000_000;
+  arm(t0);
+  store.sweep(t0 + FORCED + 1);
+  assert.equal(current(room.state).id, 'a', 'still their turn — they can still challenge');
+  assert.equal(room.state.pendingDraw, 4, 'and have not been made to draw');
 });
 
 test('the clock expiring takes the penalty and forfeits the turn', () => {
@@ -120,7 +145,9 @@ test('the clock expiring takes the penalty and forfeits the turn', () => {
   assert.equal(room.state.players[0]!.hand.length, 3, 'took the two penalty cards');
   assert.equal(room.state.pendingDraw, 0);
   assert.equal(current(room.state).id, 'b', 'turn moved on');
-  assert.ok(room.state.log.some((l) => l.text.includes('ran out of time and takes 2')));
+  assert.ok(
+    room.state.log.some((l) => l.key === 'ranOutOfTimeTakes' && l.params?.count === 2),
+  );
   void code;
 });
 
@@ -262,5 +289,8 @@ test('the clock keeps firing until somebody can actually move', () => {
     room.state.phase !== 'playing' || room.state.players.every((p) => p.hand.length > 1),
     'the game advanced instead of sitting on one player',
   );
-  assert.ok(room.state.log.filter((l) => l.text.includes('ran out of time')).length > 1);
+  assert.ok(
+    room.state.log.filter((l) => l.key === 'ranOutOfTime' || l.key === 'ranOutOfTimeTakes')
+      .length > 1,
+  );
 });

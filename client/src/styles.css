@@ -710,6 +710,80 @@ input:focus-visible {
   animation: pulse 1.1s ease-in-out infinite;
 }
 
+/* Challenging a +4 */
+.challenge-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 12px 4px;
+}
+.challenge-bar small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.btn.challenge {
+  background: linear-gradient(180deg, #ff6a52, var(--red));
+  border-color: transparent;
+  color: #fff;
+  font-weight: 800;
+  padding: 10px 26px;
+  animation: pulse 1.3s ease-in-out infinite;
+}
+
+.reveal-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+/* Language picker */
+.lang select {
+  appearance: none;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lang[data-compact='true'] select {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+.lang select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.home-lang {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
+.lang-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lang-panel h2 {
+  margin: 0;
+}
+.lang-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .catch-banner {
   position: fixed;
   top: 8px;

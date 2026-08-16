@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import {
-  COLORS,
-  describeCard,
-  type Action,
-  type Card,
-  type CardColor,
-  type GameView,
-} from '@uno/shared';
+import { COLORS, type Action, type Card, type CardColor, type GameView } from '@uno/shared';
 import { CardFace, PALETTE } from '../components/CardFace';
+import { LanguagePicker, useI18n } from '../i18n';
 
 interface Props {
   view: GameView;
@@ -16,6 +10,7 @@ interface Props {
 }
 
 export function Game({ view, send, onLeave }: Props) {
+  const { s, log: tLog, card: tCard } = useI18n();
   const [pendingWild, setPendingWild] = useState<Card | null>(null);
   const [pendingSwap, setPendingSwap] = useState<{ card: Card; color?: CardColor } | null>(null);
   const [showLog, setShowLog] = useState(false);
@@ -59,6 +54,14 @@ export function Game({ view, send, onLeave }: Props) {
     void send({ type: 'play', cardId: pending.card.id, targetPlayerId });
   };
 
+  // The reveal is shown once, then dismissed — the server keeps sending it so a
+  // reconnecting player does not miss the result of their own challenge.
+  const [seenChallenge, setSeenChallenge] = useState<number | null>(null);
+  const reveal =
+    view.challengeResult && view.challengeResult.id !== seenChallenge ? view.challengeResult : null;
+  const accusedName =
+    view.players.find((p) => p.id === reveal?.accusedId)?.name ?? '';
+
   const canCatch = view.unoVulnerable && view.unoVulnerable !== view.you.id;
   const canCallUno =
     view.phase === 'playing' &&
@@ -69,16 +72,16 @@ export function Game({ view, send, onLeave }: Props) {
     <div className="game" data-color={view.activeColor ?? 'none'}>
       <header className="game-head">
         <button className="btn ghost tiny" onClick={onLeave}>
-          Leave
+          {s.ui.leave}
         </button>
         <div className="head-mid">
           <span className="room-code">{view.code}</span>
-          <span className="dir" title={view.direction === 1 ? 'Clockwise' : 'Counter-clockwise'}>
+          <span className="dir" title={view.direction === 1 ? s.ui.clockwise : s.ui.counterClockwise}>
             {view.direction === 1 ? '↻' : '↺'}
           </span>
         </div>
-        <button className="btn ghost tiny" onClick={() => setShowLog((s) => !s)}>
-          Log
+        <button className="btn ghost tiny" onClick={() => setShowLog((v) => !v)}>
+          {s.ui.gameLog}
         </button>
       </header>
 
@@ -97,7 +100,7 @@ export function Game({ view, send, onLeave }: Props) {
               {view.rules.scoring && <span className="opp-score">{p.score}</span>}
               {view.unoVulnerable === p.id && (
                 <button className="catch" onClick={() => void send({ type: 'callOut', playerId: p.id })}>
-                  Catch!
+                  {s.ui.catchThem}
                 </button>
               )}
               {p.saidUno && p.handCount === 1 && <span className="uno-flag">UNO</span>}
@@ -116,9 +119,9 @@ export function Game({ view, send, onLeave }: Props) {
           className="pile draw"
           disabled={!yourTurn || view.hasDrawn}
           onClick={() => void send({ type: 'draw' })}
-          aria-label={`Draw pile, ${view.drawPileCount} cards`}
+          aria-label={s.ui.drawPileLabel(view.drawPileCount)}
         >
-          <CardFace faceDown width={104} />
+          <CardFace faceDown width={104} label={s.ui.faceDownCard} />
           <span className="pile-count">{view.drawPileCount}</span>
           {view.pendingDraw > 0 && yourTurn && <span className="pending">+{view.pendingDraw}</span>}
         </button>
@@ -139,7 +142,7 @@ export function Game({ view, send, onLeave }: Props) {
           )}
           {view.activeColor && (
             <span className="color-chip" style={{ background: PALETTE[view.activeColor].face }}>
-              {view.activeColor}
+              {s.colour[view.activeColor]}
             </span>
           )}
         </div>
@@ -150,16 +153,18 @@ export function Game({ view, send, onLeave }: Props) {
           yourTurn ? (
             <strong className="your-turn">
               {view.pendingDraw > 0
-                ? `Draw ${view.pendingDraw}${view.you.playable.length ? ' or stack a penalty' : ''}`
+                ? view.you.playable.length
+                  ? s.ui.drawNOrStack(view.pendingDraw)
+                  : s.ui.drawN(view.pendingDraw)
                 : view.hasDrawn
-                  ? 'Play the card you drew, or pass'
-                  : 'Your turn'}
+                  ? s.ui.playDrawnOrPass
+                  : s.ui.yourTurn}
             </strong>
           ) : (
-            <span className="muted">Waiting for {current?.name ?? '…'}</span>
+            <span className="muted">{s.ui.waitingFor(current?.name ?? '…')}</span>
           )
         ) : (
-          <span className="muted">Round over</span>
+          <span className="muted">{s.ui.roundOver}</span>
         )}
 
         {clock && (
@@ -171,7 +176,7 @@ export function Game({ view, send, onLeave }: Props) {
               <span className="turn-clock-count">
                 {clock.seconds}s
                 <span className="sr-only">
-                  {yourTurn ? ' left to play before you forfeit the turn' : ' left in their turn'}
+                  {yourTurn ? s.ui.clockLeftYours : s.ui.clockLeftTheirs}
                 </span>
               </span>
             )}
@@ -188,14 +193,23 @@ export function Game({ view, send, onLeave }: Props) {
               data-playable={playable.has(card.id)}
               disabled={!playable.has(card.id)}
               onClick={() => attempt(card)}
-              aria-label={describeCard(card)}
+              aria-label={tCard(card)}
             >
               <CardFace card={card} width={layout.cardWidth} />
             </button>
           ))}
-          {view.you.hand.length === 0 && <p className="muted">No cards.</p>}
+          {view.you.hand.length === 0 && <p className="muted">{s.ui.noCards}</p>}
         </div>
       </section>
+
+      {view.canChallenge && (
+        <div className="challenge-bar">
+          <button className="btn challenge" onClick={() => void send({ type: 'challenge' })}>
+            {s.ui.challenge}
+          </button>
+          <small>{s.ui.challengeHint}</small>
+        </div>
+      )}
 
       <footer className="actions">
         <button
@@ -203,7 +217,7 @@ export function Game({ view, send, onLeave }: Props) {
           disabled={!yourTurn || view.hasDrawn}
           onClick={() => void send({ type: 'draw' })}
         >
-          {view.pendingDraw > 0 ? `Draw ${view.pendingDraw}` : 'Draw'}
+          {view.pendingDraw > 0 ? s.ui.drawN(view.pendingDraw) : s.ui.draw}
         </button>
         <button
           className="btn uno-btn"
@@ -211,21 +225,21 @@ export function Game({ view, send, onLeave }: Props) {
           disabled={!canCallUno}
           onClick={() => void send({ type: 'sayUno' })}
         >
-          UNO!
+          {s.ui.uno}
         </button>
         <button
           className="btn"
           disabled={!yourTurn || !view.hasDrawn}
           onClick={() => void send({ type: 'pass' })}
         >
-          Pass
+          {s.ui.pass}
         </button>
       </footer>
 
-      {canCatch && <div className="catch-banner">Someone forgot to call UNO — tap “Catch!”</div>}
+      {canCatch && <div className="catch-banner">{s.ui.catchBanner}</div>}
 
       {pendingWild && (
-        <Modal title="Pick a colour" onClose={() => setPendingWild(null)}>
+        <Modal title={s.ui.pickColour} onClose={() => setPendingWild(null)}>
           <div className="color-grid">
             {COLORS.map((c) => (
               <button
@@ -234,7 +248,7 @@ export function Game({ view, send, onLeave }: Props) {
                 style={{ background: PALETTE[c].face }}
                 onClick={() => chooseColor(c)}
               >
-                {c}
+                {s.colour[c]}
               </button>
             ))}
           </div>
@@ -242,7 +256,7 @@ export function Game({ view, send, onLeave }: Props) {
       )}
 
       {pendingSwap && (
-        <Modal title="Swap hands with…" onClose={() => setPendingSwap(null)}>
+        <Modal title={s.ui.swapWith} onClose={() => setPendingSwap(null)}>
           <div className="target-grid">
             {others.map((p) => (
               <button key={p.id} className="btn" onClick={() => chooseSwapTarget(p.id)}>
@@ -253,11 +267,35 @@ export function Game({ view, send, onLeave }: Props) {
         </Modal>
       )}
 
+      {reveal && (
+        <Modal
+          title={reveal.upheld ? s.ui.challengeWonTitle : s.ui.challengeLostTitle}
+          closeLabel={s.ui.dismiss}
+          onClose={() => setSeenChallenge(reveal.id)}
+        >
+          <p className={reveal.upheld ? 'winner' : ''}>
+            {reveal.upheld
+              ? s.ui.challengeWonBody(accusedName, reveal.drawn)
+              : s.ui.challengeLostBody(accusedName, reveal.drawn)}
+          </p>
+          <p className="muted">{s.ui.theirHandWas}</p>
+          <div className="reveal-hand">
+            {reveal.revealed.map((c) => (
+              <CardFace key={c.id} card={c} width={54} />
+            ))}
+          </div>
+        </Modal>
+      )}
+
       {overlayOpen && <RoundOver view={view} send={send} onLeave={onLeave} />}
 
       {showLog && (
-        <Modal title="Game log" onClose={() => setShowLog(false)}>
-          <Log view={view} />
+        <Modal title={s.ui.gameLog} onClose={() => setShowLog(false)}>
+          <Log view={view} render={tLog} />
+          <div className="lang-row">
+            <span>{s.ui.language}</span>
+            <LanguagePicker />
+          </div>
         </Modal>
       )}
     </div>
@@ -265,6 +303,7 @@ export function Game({ view, send, onLeave }: Props) {
 }
 
 function RoundOver({ view, send, onLeave }: Props) {
+  const { s } = useI18n();
   const matchOver = view.phase === 'matchOver';
   const winnerId = matchOver ? view.matchWinner : view.roundWinner;
   const winner = view.players.find((p) => p.id === winnerId);
@@ -273,9 +312,9 @@ function RoundOver({ view, send, onLeave }: Props) {
   return (
     <div className="overlay">
       <div className="sheet">
-        <h2>{matchOver ? 'Match over' : 'Round over'}</h2>
+        <h2>{matchOver ? s.ui.matchOver : s.ui.roundOver}</h2>
         <p className="winner">
-          {winner ? (winner.id === view.you.id ? 'You win!' : `${winner.name} wins!`) : '—'}
+          {winner ? (winner.id === view.you.id ? s.ui.youWin : s.ui.playerWins(winner.name)) : '—'}
         </p>
 
         {view.rules.scoring && (
@@ -292,17 +331,17 @@ function RoundOver({ view, send, onLeave }: Props) {
         <div className="sheet-actions">
           {view.you.isHost && !matchOver && (
             <button className="btn primary big" onClick={() => void send({ type: 'nextRound' })}>
-              Next round
+              {s.ui.nextRound}
             </button>
           )}
           {view.you.isHost && matchOver && (
             <button className="btn primary big" onClick={() => void send({ type: 'start' })}>
-              Play again
+              {s.ui.playAgain}
             </button>
           )}
-          {!view.you.isHost && <p className="muted">Waiting for the host…</p>}
+          {!view.you.isHost && <p className="muted">{s.ui.waitingForHost}</p>}
           <button className="btn ghost" onClick={onLeave}>
-            Leave game
+            {s.ui.leaveGame}
           </button>
         </div>
       </div>
@@ -310,7 +349,7 @@ function RoundOver({ view, send, onLeave }: Props) {
   );
 }
 
-function Log({ view }: { view: GameView }) {
+function Log({ view, render }: { view: GameView; render: (e: GameView['log'][number]) => string }) {
   const ref = useRef<HTMLOListElement>(null);
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight });
@@ -318,7 +357,7 @@ function Log({ view }: { view: GameView }) {
   return (
     <ol className="log" ref={ref}>
       {view.log.map((entry) => (
-        <li key={entry.id}>{entry.text}</li>
+        <li key={entry.id}>{render(entry)}</li>
       ))}
     </ol>
   );
@@ -328,18 +367,21 @@ function Modal({
   title,
   children,
   onClose,
+  closeLabel,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  closeLabel?: string;
 }) {
+  const { s } = useI18n();
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <h2>{title}</h2>
         {children}
         <button className="btn ghost" onClick={onClose}>
-          Cancel
+          {closeLabel ?? s.ui.cancel}
         </button>
       </div>
     </div>

@@ -16,7 +16,7 @@
     "build": "npm run build --workspace client",
     "start": "npm run start --workspace server",
     "typecheck": "tsc -p shared && tsc -p server && tsc -p client",
-    "test": "node --import tsx --test shared/test/*.test.ts server/test/*.test.ts",
+    "test": "node --import tsx --test shared/test/*.test.ts server/test/*.test.ts client/test/*.test.ts",
     "smoke": "tsx scripts/smoke.ts",
     "restart-check": "tsx scripts/restart-check.ts"
   },

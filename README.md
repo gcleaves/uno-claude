@@ -64,6 +64,7 @@ Configurable by the host in the lobby:
 | Rule                  | Default | Effect                                                                  |
 | --------------------- | ------- | ----------------------------------------------------------------------- |
 | Stacking              | on      | Answer a +2 with a +2 (or escalate to a +4) to pass the penalty along.   |
+| Challenge the +4      | on      | The next player may call a bluffed Wild Draw Four. See below.            |
 | Draw until playable   | off     | Keep drawing until something matches, instead of drawing exactly one.    |
 | Sevens and zeros      | off     | A 7 swaps hands with a chosen player; a 0 rotates all hands.             |
 | Keep score            | on      | Play rounds to a target score (default 500) instead of a single round.   |
@@ -74,9 +75,31 @@ starting card takes effect on the first player, the draw pile is reshuffled from
 the discards when it runs out, UNO must be declared and can be caught for a
 2-card penalty, and official scoring (face value / 20 / 50).
 
-Two deliberate simplifications: a wild flipped as the starting card is buried and
-another card is turned instead (nobody has played yet, so there is no one to
-choose the colour), and Wild Draw Four cannot be challenged.
+One deliberate simplification: a wild flipped as the starting card is buried and
+another card is turned instead, since nobody has played yet and there is no one
+to choose the colour.
+
+### Challenging a Wild Draw Four
+
+A Wild Draw Four is only a legal play when you hold **nothing of the colour
+currently in play**. Holding a matching number, or another wild, does not stop
+you — only the colour does. Bluffing is allowed; the challenge is what enforces
+the rule.
+
+When a +4 lands on you, you may take the cards or call the bluff. If you
+challenge, the accused shows you their hand:
+
+- **They were bluffing** — they draw the penalty instead of you, and your turn
+  carries on as normal.
+- **They were clean** — you draw the penalty *plus two more* and lose your turn.
+
+Their hand is shown only to the challenger, as in the official rule; everyone
+else just sees the outcome in the log. With stacking on, the challenge always
+targets the most recent +4, and a successful one makes that player eat the whole
+accumulated stack.
+
+Deciding whether to challenge counts as a real decision, so it gets the full turn
+clock rather than the short one used for forced draws.
 
 ## Authentication
 
@@ -243,6 +266,24 @@ is already a clean serialisation boundary.
 ```bash
 npm run build && npm start
 ```
+
+## Languages
+
+The interface is available in **English, Spanish and Italian**, switchable from
+the home screen, the lobby, or the game log while a game is running. The choice
+is remembered, and a first-time visitor gets their browser's language when it is
+one of the three.
+
+Everyone at a table can read in a different language: nothing user-visible is
+generated as English prose on the server. Log entries travel as a key plus
+values (`{ key: 'played', params: { name: 'Ada' }, card }`) and rejection
+reasons travel as codes, so the words — including card names like *Comodín Roba
+Cuatro* and *Jolly Pesca Quattro* — are chosen on each player's own device.
+
+Adding a language means adding one file under `client/src/i18n/`. The `Strings`
+type makes a missing key a compile error, and `client/test/i18n.test.ts` checks
+what types cannot: that no translation dropped a placeholder, and that nothing
+was left as untranslated English.
 
 ## License
 

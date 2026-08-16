@@ -26,9 +26,11 @@ interface Props {
   /** Renders the wild in a chosen colour, e.g. the discard pile top. */
   chosenColor?: CardColor | null;
   className?: string;
+  /** Accessible name. Supplied by the caller so it can be localised. */
+  label?: string;
 }
 
-export function CardFace({ card, faceDown, width = 96, chosenColor, className }: Props) {
+export function CardFace({ card, faceDown, width = 96, chosenColor, className, label }: Props) {
   const height = Math.round((width * H) / W);
   const common = {
     viewBox: `0 0 ${W} ${H}`,
@@ -40,7 +42,7 @@ export function CardFace({ card, faceDown, width = 96, chosenColor, className }:
 
   if (faceDown || !card) {
     return (
-      <svg {...common} aria-label="Face-down card">
+      <svg {...common} aria-label={label ?? 'Face-down card'}>
         <CardBody body={WILD_BODY} deep={WILD_DEEP} />
         <g transform={`translate(${W / 2} ${H / 2}) rotate(-20)`}>
           <ellipse rx="88" ry="52" fill="#fff" />
@@ -69,7 +71,7 @@ export function CardFace({ card, faceDown, width = 96, chosenColor, className }:
   const accent = wild && chosenColor ? PALETTE[chosenColor].face : null;
 
   return (
-    <svg {...common} aria-label={labelFor(card, chosenColor)}>
+    <svg {...common} aria-label={label ?? labelFor(card, chosenColor)}>
       <CardBody body={body} deep={deep} />
 
       {/* Tilted oval that every Uno face sits inside. */}

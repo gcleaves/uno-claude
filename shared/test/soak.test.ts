@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   addPlayer,
   applyAction,
+  canChallenge,
   createGame,
   current,
   handPoints,
@@ -78,6 +79,15 @@ function playRound(seed: number, playerCount: number, rules: Partial<HouseRules>
       `legal action rejected (seed ${seed}, step ${steps}): ${result.error}`,
     );
 
+    // Sometimes call the bluff on a +4 rather than taking the cards.
+    if (state.phase === 'playing' && rng() < 0.35) {
+      const challenger = current(state);
+      if (canChallenge(state, challenger)) {
+        const result = applyAction(state, challenger.id, { type: 'challenge' }, rng);
+        assert.equal(result.ok, true, `challenge rejected (seed ${seed}): ${result.error}`);
+      }
+    }
+
     // Someone who forgot to call gets caught by a neighbour.
     if (state.unoVulnerable && rng() < 0.3) {
       const catcher = state.players.find((p) => p.id !== state.unoVulnerable);
@@ -104,6 +114,7 @@ const VARIANTS: Array<{ name: string; rules: Partial<HouseRules> }> = [
   { name: 'draw until playable', rules: { drawToMatch: true } },
   { name: 'sevens and zeros', rules: { sevenZero: true } },
   { name: 'everything on', rules: { stacking: true, drawToMatch: true, sevenZero: true } },
+  { name: 'no challenges', rules: { challenges: false } },
 ];
 
 for (const variant of VARIANTS) {

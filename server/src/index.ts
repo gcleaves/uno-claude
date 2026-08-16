@@ -109,7 +109,7 @@ io.on('connection', (socket: Socket) => {
     'room:join',
     (payload: { code?: string; name?: string }, cb?: (r: unknown) => void) => {
       const code = (payload?.code ?? '').trim().toUpperCase();
-      if (!/^[A-Z0-9]{4}$/.test(code)) return cb?.({ ok: false, error: 'Codes are 4 characters.' });
+      if (!/^[A-Z0-9]{4}$/.test(code)) return cb?.({ ok: false, error: 'badCode' });
       if (config.authMode === 'guest' && payload?.name) {
         data.identity.name = sanitizeName(payload.name);
       }
@@ -139,7 +139,7 @@ io.on('connection', (socket: Socket) => {
 
   socket.on('game:action', (action: Action, cb?: (r: ActionResult) => void) => {
     const { code, playerId } = data;
-    if (!code || !playerId) return cb?.({ ok: false, error: 'You are not in a game.' });
+    if (!code || !playerId) return cb?.({ ok: false, error: 'notInGame' });
     const result = rooms.act(code, playerId, action);
     cb?.(result);
     if (!result.ok) pushSelf();

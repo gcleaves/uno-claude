@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { Action, ActionResult, GameView } from '@uno/shared';
+import type { Action, ActionResult, ErrorCode, GameView } from '@uno/shared';
 
 const TOKEN_KEY = 'uno.token';
 const NAME_KEY = 'uno.name';
@@ -19,7 +19,7 @@ export interface Net {
   conn: ConnState;
   view: GameView | null;
   code: string | null;
-  error: string | null;
+  error: ErrorCode | null;
   clearError: () => void;
   createRoom: (name: string) => Promise<string | null>;
   joinRoom: (code: string, name: string) => Promise<boolean>;
@@ -32,7 +32,7 @@ export function useNet(): Net {
   const [conn, setConn] = useState<ConnState>('connecting');
   const [view, setView] = useState<GameView | null>(null);
   const [code, setCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorCode | null>(null);
   // Kept in a ref so the reconnect handler always sees the current room.
   const rejoin = useRef<{ code: string; name: string } | null>(null);
 
@@ -52,21 +52,18 @@ export function useNet(): Net {
       // Re-take our seat after a network blip or a phone waking up.
       const target = rejoin.current;
       if (target) {
-        socket.emit('room:join', target, (res: { ok: boolean; error?: string }) => {
+        socket.emit('room:join', target, (res: { ok: boolean; error?: ErrorCode }) => {
           if (!res.ok) {
             rejoin.current = null;
             setCode(null);
             setView(null);
-            setError(res.error ?? 'Lost your seat.');
+            setError(res.error ?? 'lostSeat');
           }
         });
       }
     });
     socket.on('disconnect', () => setConn('offline'));
-    socket.on('connect_error', (e) => {
-      setConn('offline');
-      setError(e.message);
-    });
+    socket.on('connect_error', () => setConn('offline'));
     socket.on('hello', (payload: { token?: string }) => {
       if (payload.token) localStorage.setItem(TOKEN_KEY, payload.token);
     });
@@ -82,11 +79,11 @@ export function useNet(): Net {
     const socket = socketRef.current;
     if (!socket) return null;
     rememberName(name);
-    const res = await emit<{ ok: boolean; code?: string; error?: string }>(socket, 'room:create', {
+    const res = await emit<{ ok: boolean; code?: string; error?: ErrorCode }>(socket, 'room:create', {
       name,
     });
     if (!res.ok || !res.code) {
-      setError(res.error ?? 'Could not create a game.');
+      setError(res.error ?? 'couldNotJoin');
       return null;
     }
     rejoin.current = { code: res.code, name };
@@ -98,12 +95,12 @@ export function useNet(): Net {
     const socket = socketRef.current;
     if (!socket) return false;
     rememberName(name);
-    const res = await emit<{ ok: boolean; code?: string; error?: string }>(socket, 'room:join', {
+    const res = await emit<{ ok: boolean; code?: string; error?: ErrorCode }>(socket, 'room:join', {
       code: roomCode,
       name,
     });
     if (!res.ok) {
-      setError(res.error ?? 'Could not join.');
+      setError(res.error ?? 'couldNotJoin');
       return false;
     }
     rejoin.current = { code: roomCode.toUpperCase(), name };
@@ -120,7 +117,7 @@ export function useNet(): Net {
 
   const send = useCallback(async (action: Action): Promise<ActionResult> => {
     const socket = socketRef.current;
-    if (!socket) return { ok: false, error: 'Not connected.' };
+    if (!socket) return { ok: false, error: 'notConnected' };
     const res = await emit<ActionResult>(socket, 'game:action', action);
     if (!res.ok && res.error) setError(res.error);
     return res;
@@ -134,7 +131,7 @@ export function useNet(): Net {
 function emit<T>(socket: Socket, event: string, payload?: unknown): Promise<T> {
   return new Promise((resolve) => {
     const timeout = setTimeout(
-      () => resolve({ ok: false, error: 'The server did not respond.' } as T),
+      () => resolve({ ok: false, error: 'noResponse' } as T),
       8000,
     );
     socket.emit(event, payload, (res: T) => {

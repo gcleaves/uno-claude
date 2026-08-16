@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import {
   addPlayer,
   applyAction,
+  canChallenge,
   createGame,
   current,
   legalPlays,
@@ -10,6 +11,7 @@ import {
   viewFor,
   type Action,
   type ActionResult,
+  type ErrorCode,
   type GameState,
   type GameView,
   type Rng,
@@ -87,9 +89,9 @@ export class RoomStore {
   join(
     code: string,
     identity: { subject: string; name: string },
-  ): { ok: true; room: Room; playerId: string } | { ok: false; error: string } {
+  ): { ok: true; room: Room; playerId: string } | { ok: false; error: ErrorCode } {
     const room = this.get(code);
-    if (!room) return { ok: false, error: 'No game with that code.' };
+    if (!room) return { ok: false, error: 'noSuchRoom' };
 
     const existing = room.state.players.find((p) => p.token === identity.subject);
     if (existing) {
@@ -109,7 +111,7 @@ export class RoomStore {
       name: identity.name,
       token: identity.subject,
     });
-    if (!result.ok) return { ok: false, error: result.error ?? 'Could not join.' };
+    if (!result.ok) return { ok: false, error: result.error ?? 'couldNotJoin' };
 
     room.seats.set(identity.subject, playerId);
     room.lastActivity = Date.now();
@@ -139,7 +141,7 @@ export class RoomStore {
   /** `now` is injectable so tests can drive the turn clock deterministically. */
   act(code: string, playerId: string, action: Action, now = Date.now()): ActionResult {
     const room = this.get(code);
-    if (!room) return { ok: false, error: 'No game with that code.' };
+    if (!room) return { ok: false, error: 'noSuchRoom' };
     const result = applyAction(room.state, playerId, action, rng);
     if (result.ok) {
       room.lastActivity = now;
@@ -266,7 +268,7 @@ export class RoomStore {
         lastActivity: now,
         resumeUntil: config.resumeGraceSec > 0 ? now + config.resumeGraceSec * 1000 : null,
       });
-      logEvent(state, 'Server restarted — the game picks up where it left off.');
+      logEvent(state, 'serverRestarted');
       count++;
     }
     this.changedSinceSnapshot = true;
@@ -283,11 +285,14 @@ export function turnBudgetMs(state: GameState): number {
   if (state.phase !== 'playing' || state.players.length === 0) return 0;
 
   const player = current(state);
+  // Being able to challenge makes this a real decision, not a formality, even
+  // though there is no card to play — so it earns the longer clock.
+  const formality = legalPlays(state, player).length === 0 && !canChallenge(state, player);
+
   const seconds = !player.connected
     ? config.afkTurnSec
-    : legalPlays(state, player).length === 0
-      ? // No legal play: the only move is to draw, so this is a formality.
-        config.forcedActionSec
+    : formality
+      ? config.forcedActionSec
       : config.turnTimeoutSec;
 
   return seconds > 0 ? seconds * 1000 : 0;
@@ -354,12 +359,8 @@ function forceTurn(room: Room): void {
   const player = current(state);
   const owed = state.pendingDraw;
 
-  logEvent(
-    state,
-    owed > 0
-      ? `${player.name} ran out of time and takes ${owed}.`
-      : `${player.name} ran out of time.`,
-  );
+  if (owed > 0) logEvent(state, 'ranOutOfTimeTakes', { name: player.name, count: owed });
+  else logEvent(state, 'ranOutOfTime', { name: player.name });
 
   applyAction(state, player.id, { type: 'draw' }, rng);
 

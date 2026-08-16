@@ -1,12 +1,4 @@
-import {
-  buildDeck,
-  canPlay,
-  describeCard,
-  handPoints,
-  isWild,
-  shuffle,
-  type Rng,
-} from './cards.js';
+import { buildDeck, canPlay, handPoints, isWild, shuffle, type Rng } from './cards.js';
 import {
   COLORS,
   DEFAULT_RULES,
@@ -14,9 +6,11 @@ import {
   type ActionResult,
   type Card,
   type CardColor,
+  type ErrorCode,
   type GameState,
   type GameView,
   type HouseRules,
+  type LogKey,
   type Player,
   type PublicPlayer,
 } from './types.js';
@@ -26,7 +20,10 @@ export const MAX_PLAYERS = 10;
 export const MIN_PLAYERS = 2;
 
 const ok: ActionResult = { ok: true };
-const fail = (error: string): ActionResult => ({ ok: false, error });
+const fail = (
+  error: ErrorCode,
+  errorParams?: Record<string, string | number>,
+): ActionResult => ({ ok: false, error, ...(errorParams && { errorParams }) });
 
 /* ------------------------------------------------------------------ *
  * Construction
@@ -46,6 +43,8 @@ export function createGame(code: string, rules: Partial<HouseRules> = {}): GameS
     activeColor: null,
     pendingDraw: 0,
     pendingDrawKind: null,
+    wild4: null,
+    challengeResult: null,
     hasDrawn: false,
     drawnPlayable: [],
     unoVulnerable: null,
@@ -61,8 +60,8 @@ export function addPlayer(
   state: GameState,
   player: { id: string; name: string; token: string },
 ): ActionResult {
-  if (state.players.length >= MAX_PLAYERS) return fail('This room is full.');
-  if (state.phase !== 'lobby') return fail('That game has already started.');
+  if (state.players.length >= MAX_PLAYERS) return fail('roomFull');
+  if (state.phase !== 'lobby') return fail('alreadyStarted');
   const isHost = state.players.length === 0;
   state.players.push({
     id: player.id,
@@ -74,7 +73,7 @@ export function addPlayer(
     score: 0,
     isHost,
   });
-  log(state, `${player.name} joined.`);
+  log(state, 'joined', { name: player.name });
   return ok;
 }
 
@@ -83,7 +82,7 @@ export function removePlayer(state: GameState, playerId: string, rng?: Rng): voi
   if (idx === -1) return;
   const [gone] = state.players.splice(idx, 1);
   if (!gone) return;
-  log(state, `${gone.name} left.`);
+  log(state, 'left', { name: gone.name });
 
   // Their cards go back into circulation so the deck doesn't quietly shrink.
   if (rng && gone.hand.length > 0) {
@@ -94,7 +93,7 @@ export function removePlayer(state: GameState, playerId: string, rng?: Rng): voi
   if (state.players.length === 0) return;
   if (gone.isHost) {
     state.players[0]!.isHost = true;
-    log(state, `${state.players[0]!.name} is now the host.`);
+    log(state, 'newHost', { name: state.players[0]!.name });
   }
   // Keep the turn pointer aimed at the same player where possible.
   if (idx < state.turn) state.turn--;
@@ -108,7 +107,7 @@ export function removePlayer(state: GameState, playerId: string, rng?: Rng): voi
 
   if (state.phase === 'playing' && state.players.length < MIN_PLAYERS) {
     state.phase = 'lobby';
-    log(state, 'Not enough players — back to the lobby.');
+    log(state, 'backToLobby');
   }
 }
 
@@ -117,7 +116,7 @@ export function removePlayer(state: GameState, playerId: string, rng?: Rng): voi
  * ------------------------------------------------------------------ */
 
 export function startRound(state: GameState, rng: Rng, startIndex = 0): ActionResult {
-  if (state.players.length < MIN_PLAYERS) return fail('Need at least 2 players.');
+  if (state.players.length < MIN_PLAYERS) return fail('needTwoPlayers');
 
   const deck = shuffle(buildDeck(), rng);
   for (const p of state.players) {
@@ -141,28 +140,30 @@ export function startRound(state: GameState, rng: Rng, startIndex = 0): ActionRe
   state.turnSeq++;
   state.pendingDraw = 0;
   state.pendingDrawKind = null;
+  state.wild4 = null;
+  state.challengeResult = null;
   state.hasDrawn = false;
   state.drawnPlayable = [];
   state.unoVulnerable = null;
   state.roundWinner = null;
   state.phase = 'playing';
-  log(state, `New round. Starting card: ${describeCard(first)}.`);
+  log(state, 'roundStart', undefined, first);
 
   // The flipped card takes effect on the first player.
   switch (first.kind) {
     case 'skip':
-      log(state, `${current(state).name} is skipped.`);
+      log(state, 'skipped', { name: current(state).name });
       advance(state, 1);
       break;
     case 'reverse':
       state.direction = -1;
       state.turn = mod(startIndex - 1, state.players.length);
-      log(state, 'Direction reversed before the first turn.');
+      log(state, 'reversedFirst');
       break;
     case 'draw2': {
       const victim = current(state);
       drawCards(state, victim, 2, rng);
-      log(state, `${victim.name} draws 2 and is skipped.`);
+      log(state, 'drawsAndSkipped', { name: victim.name });
       advance(state, 1);
       break;
     }
@@ -183,12 +184,12 @@ export function applyAction(
   rng: Rng,
 ): ActionResult {
   const player = state.players.find((p) => p.id === playerId);
-  if (!player) return fail('You are not in this game.');
+  if (!player) return fail('notInGame');
 
   switch (action.type) {
     case 'start': {
-      if (!player.isHost) return fail('Only the host can start the game.');
-      if (state.phase === 'playing') return fail('The game is already running.');
+      if (!player.isHost) return fail('notHost');
+      if (state.phase === 'playing') return fail('gameRunning');
       // "Play again" after a finished match starts a fresh scoreboard.
       if (state.phase === 'matchOver') {
         for (const p of state.players) p.score = 0;
@@ -198,8 +199,8 @@ export function applyAction(
     }
 
     case 'updateRules': {
-      if (!player.isHost) return fail('Only the host can change the rules.');
-      if (state.phase === 'playing') return fail('Finish the round first.');
+      if (!player.isHost) return fail('notHost');
+      if (state.phase === 'playing') return fail('finishRoundFirst');
       const next = { ...state.rules, ...action.rules };
       next.handSize = clamp(Math.round(next.handSize), 1, 15);
       next.targetScore = clamp(Math.round(next.targetScore), 50, 2000);
@@ -208,8 +209,8 @@ export function applyAction(
     }
 
     case 'nextRound': {
-      if (!player.isHost) return fail('Only the host can deal the next round.');
-      if (state.phase !== 'roundOver') return fail('The round is not over.');
+      if (!player.isHost) return fail('notHost');
+      if (state.phase !== 'roundOver') return fail('roundNotOver');
       // Rotate who leads so the deal moves around the table.
       const startIndex = mod(state.turn + 1, state.players.length);
       return startRound(state, rng, startIndex);
@@ -227,6 +228,9 @@ export function applyAction(
     case 'draw':
       return drawTurn(state, player, rng);
 
+    case 'challenge':
+      return challengeWild4(state, player, rng);
+
     case 'pass':
       return passTurn(state, player);
   }
@@ -240,23 +244,26 @@ function playCard(
   targetPlayerId: string | undefined,
   rng: Rng,
 ): ActionResult {
-  if (state.phase !== 'playing') return fail('The game is not running.');
-  if (current(state).id !== player.id) return fail('It is not your turn.');
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (current(state).id !== player.id) return fail('notYourTurn');
 
   const idx = player.hand.findIndex((c) => c.id === cardId);
-  if (idx === -1) return fail('That card is not in your hand.');
+  if (idx === -1) return fail('cardNotInHand');
   const card = player.hand[idx]!;
+  // Judged now, against the colour in play and the hand as it stands: once the
+  // card is down and the colour has changed, the evidence is gone.
+  const heldActiveColor = player.hand.some((c) => c.color === state.activeColor);
 
   if (!legalPlays(state, player).includes(cardId)) {
     if (state.pendingDraw > 0) {
-      return fail(`You must draw ${state.pendingDraw} or stack another penalty card.`);
+      return fail('mustDrawPenalty', { count: state.pendingDraw });
     }
-    if (state.hasDrawn) return fail('You may only play the card you just drew.');
-    return fail(`${describeCard(card)} does not match.`);
+    if (state.hasDrawn) return fail('onlyDrawnCard');
+    return fail('cardNoMatch');
   }
 
-  if (isWild(card) && !chosenColor) return fail('Pick a colour for your wild.');
-  if (chosenColor && !COLORS.includes(chosenColor)) return fail('Unknown colour.');
+  if (isWild(card) && !chosenColor) return fail('pickColour');
+  if (chosenColor && !COLORS.includes(chosenColor)) return fail('unknownColour');
 
   player.hand.splice(idx, 1);
   state.discardPile.push(card);
@@ -264,8 +271,15 @@ function playCard(
   state.hasDrawn = false;
   state.drawnPlayable = [];
 
-  const colorNote = isWild(card) ? ` and calls ${chosenColor}` : '';
-  log(state, `${player.name} played ${describeCard(card)}${colorNote}.`);
+  // A Wild Draw Four is only legal with nothing of the current colour in hand.
+  // Bluffing is allowed — the challenge is what enforces the rule.
+  state.wild4 = card.kind === 'wild4' ? { playerId: player.id, legal: !heldActiveColor } : null;
+
+  if (isWild(card)) {
+    log(state, 'playedWild', { name: player.name, colour: chosenColor! }, card);
+  } else {
+    log(state, 'played', { name: player.name }, card);
+  }
 
   // Someone who was vulnerable and got away with it is safe once play moves on.
   if (state.unoVulnerable && state.unoVulnerable !== player.id) state.unoVulnerable = null;
@@ -297,7 +311,7 @@ function applyCardEffect(
   switch (card.kind) {
     case 'skip': {
       const victim = peek(state, 1);
-      log(state, `${victim.name} is skipped.`);
+      log(state, 'skipped', { name: victim.name });
       advance(state, 2);
       return;
     }
@@ -305,10 +319,10 @@ function applyCardEffect(
       state.direction = state.direction === 1 ? -1 : 1;
       if (n === 2) {
         // Head-to-head, a reverse behaves like a skip: the same player goes again.
-        log(state, `${player.name} plays again.`);
+        log(state, 'playsAgain', { name: player.name });
         advance(state, 2);
       } else {
-        log(state, 'Direction reversed.');
+        log(state, 'reversed');
         advance(state, 1);
       }
       return;
@@ -348,7 +362,7 @@ function swapHands(state: GameState, player: Player, targetPlayerId: string | un
   if (state.unoVulnerable === player.id || state.unoVulnerable === target.id) {
     state.unoVulnerable = null;
   }
-  log(state, `${player.name} swapped hands with ${target.name}.`);
+  log(state, 'swappedHands', { name: player.name, target: target.name });
 }
 
 function rotateHands(state: GameState): void {
@@ -360,25 +374,27 @@ function rotateHands(state: GameState): void {
     state.players[i]!.saidUno = false;
   }
   state.unoVulnerable = null;
-  log(state, 'Everyone passes their hand around.');
+  log(state, 'rotatedHands');
 }
 
 function drawTurn(state: GameState, player: Player, rng: Rng): ActionResult {
-  if (state.phase !== 'playing') return fail('The game is not running.');
-  if (current(state).id !== player.id) return fail('It is not your turn.');
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (current(state).id !== player.id) return fail('notYourTurn');
 
   if (state.pendingDraw > 0) {
     const count = state.pendingDraw;
     drawCards(state, player, count, rng);
     state.pendingDraw = 0;
     state.pendingDrawKind = null;
-    log(state, `${player.name} draws ${count} and loses their turn.`);
+    // Taking the cards ends any chance to question the play.
+    state.wild4 = null;
+    log(state, 'drawsAndLosesTurn', { name: player.name, count });
     player.saidUno = false;
     advance(state, 1);
     return ok;
   }
 
-  if (state.hasDrawn) return fail('You have already drawn — play that card or pass.');
+  if (state.hasDrawn) return fail('alreadyDrawn');
 
   const drawn: Card[] = [];
   const top = topCard(state);
@@ -400,18 +416,14 @@ function drawTurn(state: GameState, player: Player, rng: Rng): ActionResult {
   }
 
   if (drawn.length === 0) {
-    log(state, `${player.name} could not draw — no cards left.`);
+    log(state, 'couldNotDraw', { name: player.name });
     advance(state, 1);
     return ok;
   }
 
   player.saidUno = false;
-  log(
-    state,
-    drawn.length === 1
-      ? `${player.name} drew a card.`
-      : `${player.name} drew ${drawn.length} cards.`,
-  );
+  if (drawn.length === 1) log(state, 'drewCard', { name: player.name });
+  else log(state, 'drewCards', { name: player.name, count: drawn.length });
 
   const playable = drawn.filter((c) => canPlay(c, top, state.activeColor)).map((c) => c.id);
   if (playable.length === 0) {
@@ -423,23 +435,76 @@ function drawTurn(state: GameState, player: Player, rng: Rng): ActionResult {
   return ok;
 }
 
+/**
+ * Call the bluff on a Wild Draw Four.
+ *
+ * Official rule: the accused shows their hand. If they had a card of the colour
+ * that was in play, the challenge holds and *they* take the penalty while the
+ * challenger plays on. If they were clean, the challenger takes the penalty plus
+ * two more and loses the turn. Either way it is a gamble, which is the point.
+ */
+function challengeWild4(state: GameState, player: Player, rng: Rng): ActionResult {
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (!state.rules.challenges) return fail('challengesDisabled');
+  if (current(state).id !== player.id) return fail('notYourTurn');
+  if (state.hasDrawn) return fail('alreadyDrawn');
+  if (!state.wild4 || state.pendingDrawKind !== 'wild4' || state.pendingDraw <= 0) {
+    return fail('noChallenge');
+  }
+
+  const accused = state.players.find((p) => p.id === state.wild4!.playerId);
+  if (!accused) return fail('unknownPlayer');
+  if (accused.id === player.id) return fail('cannotCatchSelf');
+
+  const upheld = !state.wild4.legal;
+  const owed = state.pendingDraw;
+  // Snapshot before anyone draws, so the reveal is the hand being judged.
+  const revealed = accused.hand.map((c) => ({ ...c }));
+
+  state.pendingDraw = 0;
+  state.pendingDrawKind = null;
+  state.wild4 = null;
+
+  if (upheld) {
+    // They were bluffing: they take the cards and the challenger plays on.
+    drawCards(state, accused, owed, rng);
+    accused.saidUno = false;
+    log(state, 'challengeUpheld', { name: player.name, target: accused.name, count: owed });
+  } else {
+    drawCards(state, player, owed + 2, rng);
+    player.saidUno = false;
+    log(state, 'challengeFailed', { name: player.name, target: accused.name, count: owed + 2 });
+    advance(state, 1);
+  }
+
+  state.challengeResult = {
+    id: state.nextLogId,
+    challengerId: player.id,
+    accusedId: accused.id,
+    upheld,
+    drawn: upheld ? owed : owed + 2,
+    revealed,
+  };
+  return ok;
+}
+
 function passTurn(state: GameState, player: Player): ActionResult {
-  if (state.phase !== 'playing') return fail('The game is not running.');
-  if (current(state).id !== player.id) return fail('It is not your turn.');
-  if (!state.hasDrawn) return fail('You must draw before passing.');
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (current(state).id !== player.id) return fail('notYourTurn');
+  if (!state.hasDrawn) return fail('mustDrawFirst');
   state.hasDrawn = false;
   state.drawnPlayable = [];
-  log(state, `${player.name} passed.`);
+  log(state, 'passed', { name: player.name });
   advance(state, 1);
   return ok;
 }
 
 function sayUno(state: GameState, player: Player): ActionResult {
-  if (state.phase !== 'playing') return fail('The game is not running.');
-  if (player.hand.length > 2) return fail('You have too many cards to call UNO.');
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (player.hand.length > 2) return fail('tooManyCardsForUno');
   player.saidUno = true;
   if (state.unoVulnerable === player.id) state.unoVulnerable = null;
-  log(state, `${player.name} calls UNO!`);
+  log(state, 'callsUno', { name: player.name });
   return ok;
 }
 
@@ -449,15 +514,15 @@ function callOut(
   targetId: string,
   rng: Rng,
 ): ActionResult {
-  if (state.phase !== 'playing') return fail('The game is not running.');
-  if (targetId === caller.id) return fail('You cannot catch yourself.');
-  if (state.unoVulnerable !== targetId) return fail('Nothing to catch right now.');
+  if (state.phase !== 'playing') return fail('gameNotRunning');
+  if (targetId === caller.id) return fail('cannotCatchSelf');
+  if (state.unoVulnerable !== targetId) return fail('nothingToCatch');
   const target = state.players.find((p) => p.id === targetId);
-  if (!target) return fail('Unknown player.');
+  if (!target) return fail('unknownPlayer');
 
   state.unoVulnerable = null;
   drawCards(state, target, 2, rng);
-  log(state, `${caller.name} caught ${target.name} — 2 penalty cards.`);
+  log(state, 'caught', { name: caller.name, target: target.name });
   return ok;
 }
 
@@ -466,6 +531,7 @@ function finishRound(state: GameState, winner: Player): void {
   state.unoVulnerable = null;
   state.pendingDraw = 0;
   state.pendingDrawKind = null;
+  state.wild4 = null;
 
   const gained = state.players
     .filter((p) => p.id !== winner.id)
@@ -473,15 +539,15 @@ function finishRound(state: GameState, winner: Player): void {
 
   if (state.rules.scoring) {
     winner.score += gained;
-    log(state, `${winner.name} wins the round and scores ${gained} (total ${winner.score}).`);
+    log(state, 'winsRoundScoring', { name: winner.name, gained, total: winner.score });
   } else {
-    log(state, `${winner.name} wins the round!`);
+    log(state, 'winsRound', { name: winner.name });
   }
 
   if (state.rules.scoring && winner.score >= state.rules.targetScore) {
     state.phase = 'matchOver';
     state.matchWinner = winner.id;
-    log(state, `${winner.name} wins the match!`);
+    log(state, 'winsMatch', { name: winner.name });
   } else {
     state.phase = 'roundOver';
   }
@@ -510,7 +576,7 @@ function refillDrawPile(state: GameState, rng: Rng): void {
   const top = state.discardPile.pop()!;
   state.drawPile = shuffle(state.discardPile, rng);
   state.discardPile = [top];
-  log(state, 'Draw pile reshuffled.');
+  log(state, 'reshuffled');
 }
 
 function mod(n: number, m: number): number {
@@ -544,19 +610,42 @@ export function topCard(state: GameState): Card | null {
   return state.discardPile[state.discardPile.length - 1] ?? null;
 }
 
-function log(state: GameState, text: string): void {
-  state.log.push({ id: state.nextLogId++, text, at: Date.now() });
+function log(
+  state: GameState,
+  key: LogKey,
+  params?: Record<string, string | number>,
+  card?: Card,
+): void {
+  state.log.push({ id: state.nextLogId++, at: Date.now(), key, ...(params && { params }), ...(card && { card }) });
   if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
 }
 
 /** Lets the server narrate things the engine has no concept of, like a turn clock. */
-export function logEvent(state: GameState, text: string): void {
-  log(state, text);
+export function logEvent(
+  state: GameState,
+  key: LogKey,
+  params?: Record<string, string | number>,
+): void {
+  log(state, key, params);
 }
 
 /* ------------------------------------------------------------------ *
  * Legality + views
  * ------------------------------------------------------------------ */
+
+/** Whether this player may question the Wild Draw Four in front of them. */
+export function canChallenge(state: GameState, player: Player): boolean {
+  return (
+    state.phase === 'playing' &&
+    state.rules.challenges &&
+    current(state).id === player.id &&
+    !state.hasDrawn &&
+    state.pendingDrawKind === 'wild4' &&
+    state.pendingDraw > 0 &&
+    !!state.wild4 &&
+    state.wild4.playerId !== player.id
+  );
+}
 
 export function legalPlays(state: GameState, player: Player): string[] {
   if (state.phase !== 'playing') return [];
@@ -609,6 +698,10 @@ export function viewFor(state: GameState, playerId: string): GameView {
     pendingDraw: state.pendingDraw,
     pendingDrawKind: state.pendingDrawKind,
     hasDrawn: state.hasDrawn,
+    canChallenge: !!me && canChallenge(state, me),
+    // The official rule shows the hand to the challenger alone.
+    challengeResult:
+      state.challengeResult?.challengerId === playerId ? state.challengeResult : null,
     unoVulnerable: state.unoVulnerable,
     roundWinner: state.roundWinner,
     matchWinner: state.matchWinner,

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CardFace } from '../components/CardFace';
 import { storedName } from '../net';
+import { LanguagePicker, useI18n } from '../i18n';
 
 interface Props {
   presetCode: string;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
+  const { s } = useI18n();
   const [name, setName] = useState(storedName());
   const [code, setCode] = useState(presetCode);
 
@@ -18,6 +20,10 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
 
   return (
     <div className="home">
+      <div className="home-lang">
+        <LanguagePicker />
+      </div>
+
       <div className="home-art" aria-hidden="true">
         <CardFace card={{ id: 'a', kind: 'number', color: 'red', value: 7 }} width={92} />
         <CardFace card={{ id: 'b', kind: 'skip', color: 'blue' }} width={92} />
@@ -26,14 +32,14 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
       </div>
 
       <h1 className="home-title">UNO</h1>
-      <p className="home-sub">Play with friends on any device.</p>
+      <p className="home-sub">{s.ui.tagline}</p>
 
       <label className="field">
-        <span>Your name</span>
+        <span>{s.ui.yourName}</span>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Alex"
+          placeholder={s.ui.namePlaceholder}
           maxLength={16}
           autoComplete="nickname"
         />
@@ -44,10 +50,12 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
         disabled={busy || trimmed.length === 0}
         onClick={() => void onCreate(trimmed)}
       >
-        Start a new game
+        {s.ui.startNewGame}
       </button>
 
-      <div className="divider"><span>or join one</span></div>
+      <div className="divider">
+        <span>{s.ui.orJoinOne}</span>
+      </div>
 
       <form
         className="join-row"
@@ -60,14 +68,14 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
           className="code-input"
           value={code}
           onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 4))}
-          placeholder="CODE"
+          placeholder={s.ui.codePlaceholder}
           inputMode="text"
           autoCapitalize="characters"
           spellCheck={false}
-          aria-label="Game code"
+          aria-label={s.ui.codeLabel}
         />
         <button className="btn big" disabled={busy || !canJoin} type="submit">
-          Join
+          {s.ui.join}
         </button>
       </form>
     </div>

@@ -32,6 +32,11 @@ export interface HouseRules {
   drawToMatch: boolean;
   /** Playing a 7 swaps hands with a chosen player; a 0 rotates all hands. */
   sevenZero: boolean;
+  /**
+   * A Wild Draw Four may only be played when you hold nothing of the current
+   * colour. With this on, the next player may call the bluff instead of drawing.
+   */
+  challenges: boolean;
   /** Score is kept across rounds; first to `targetScore` wins the match. */
   scoring: boolean;
   targetScore: number;
@@ -42,6 +47,7 @@ export const DEFAULT_RULES: HouseRules = {
   stacking: true,
   drawToMatch: false,
   sevenZero: false,
+  challenges: true,
   scoring: true,
   targetScore: 500,
 };
@@ -62,11 +68,85 @@ export interface Player {
 
 export type GamePhase = 'lobby' | 'playing' | 'roundOver' | 'matchOver';
 
+/**
+ * Log messages travel as a key plus values, never as prose: the server has no
+ * idea what language each player is reading in, so the words are chosen on the
+ * client. Same reasoning as ErrorCode below.
+ */
+export type LogKey =
+  | 'joined'
+  | 'left'
+  | 'newHost'
+  | 'backToLobby'
+  | 'roundStart'
+  | 'skipped'
+  | 'drawsAndSkipped'
+  | 'reversedFirst'
+  | 'played'
+  | 'playedWild'
+  | 'playsAgain'
+  | 'reversed'
+  | 'swappedHands'
+  | 'rotatedHands'
+  | 'drawsAndLosesTurn'
+  | 'couldNotDraw'
+  | 'drewCard'
+  | 'drewCards'
+  | 'passed'
+  | 'callsUno'
+  | 'caught'
+  | 'winsRoundScoring'
+  | 'winsRound'
+  | 'winsMatch'
+  | 'reshuffled'
+  | 'ranOutOfTime'
+  | 'ranOutOfTimeTakes'
+  | 'serverRestarted'
+  | 'challengeUpheld'
+  | 'challengeFailed';
+
 export interface LogEntry {
   id: number;
-  text: string;
   at: number;
+  key: LogKey;
+  /** Names, counts and colours the message refers to. */
+  params?: Record<string, string | number>;
+  /** A card the message names, so the reader sees it in their own language. */
+  card?: Card;
 }
+
+/** Rejection reasons, as codes for the same reason log messages are keys. */
+export type ErrorCode =
+  | 'notInGame'
+  | 'roomFull'
+  | 'alreadyStarted'
+  | 'notHost'
+  | 'gameRunning'
+  | 'gameNotRunning'
+  | 'roundNotOver'
+  | 'finishRoundFirst'
+  | 'needTwoPlayers'
+  | 'notYourTurn'
+  | 'cardNotInHand'
+  | 'mustDrawPenalty'
+  | 'onlyDrawnCard'
+  | 'cardNoMatch'
+  | 'pickColour'
+  | 'unknownColour'
+  | 'alreadyDrawn'
+  | 'mustDrawFirst'
+  | 'tooManyCardsForUno'
+  | 'cannotCatchSelf'
+  | 'nothingToCatch'
+  | 'unknownPlayer'
+  | 'noChallenge'
+  | 'challengesDisabled'
+  | 'noSuchRoom'
+  | 'couldNotJoin'
+  | 'badCode'
+  | 'notConnected'
+  | 'noResponse'
+  | 'lostSeat';
 
 export interface GameState {
   code: string;
@@ -91,6 +171,29 @@ export interface GameState {
   pendingDraw: number;
   /** Which kind of penalty is stacked, so +2 can't be answered with +4. */
   pendingDrawKind: 'draw2' | 'wild4' | null;
+  /**
+   * The Wild Draw Four now facing the current player, and whether it was
+   * played legally. Recorded when it is played, because by the time anyone
+   * challenges, the evidence — the player's hand at that moment — has moved on.
+   */
+  wild4: { playerId: string; legal: boolean } | null;
+  /**
+   * Outcome of the last challenge, including the hand that was shown. Sent only
+   * to the challenger, who under the official rule is the one entitled to see it.
+   */
+  challengeResult: {
+    id: number;
+    challengerId: string;
+    accusedId: string;
+    /** True when the accused was bluffing and the challenge succeeded. */
+    upheld: boolean;
+    /**
+     * How many cards the loser actually drew. Carried explicitly because the
+     * pending penalty is cleared by the time anyone reads this.
+     */
+    drawn: number;
+    revealed: Card[];
+  } | null;
   /** The current player has taken their draw this turn and may only play that card or pass. */
   hasDrawn: boolean;
   /** Card ids the current player is allowed to play after drawing (subset of hand). */
@@ -135,6 +238,10 @@ export interface GameView {
   pendingDraw: number;
   pendingDrawKind: 'draw2' | 'wild4' | null;
   hasDrawn: boolean;
+  /** True when this player may challenge the Wild Draw Four facing them. */
+  canChallenge: boolean;
+  /** Only ever populated for the challenger. */
+  challengeResult: GameState['challengeResult'];
   unoVulnerable: string | null;
   roundWinner: string | null;
   matchWinner: string | null;
@@ -166,6 +273,7 @@ export type Action =
   | { type: 'start' }
   | { type: 'play'; cardId: string; chosenColor?: CardColor; targetPlayerId?: string }
   | { type: 'draw' }
+  | { type: 'challenge' }
   | { type: 'pass' }
   | { type: 'sayUno' }
   | { type: 'callOut'; playerId: string }
@@ -174,5 +282,7 @@ export type Action =
 
 export interface ActionResult {
   ok: boolean;
-  error?: string;
+  error?: ErrorCode;
+  /** Values the message needs, e.g. how many cards are owed. */
+  errorParams?: Record<string, string | number>;
 }

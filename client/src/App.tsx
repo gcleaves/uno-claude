@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { storedName, useNet } from './net';
+import { useI18n } from './i18n';
 import { Home } from './screens/Home';
 import { Lobby } from './screens/Lobby';
 import { Game } from './screens/Game';
 
 export default function App() {
+  const { s, error: tError } = useI18n();
   const net = useNet();
   const [busy, setBusy] = useState(false);
   const [presetCode] = useState(() => {
@@ -52,7 +54,7 @@ export default function App() {
     <div className="app">
       {net.conn !== 'online' && (
         <div className="conn-banner">
-          {net.conn === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+          {net.conn === 'connecting' ? s.ui.connecting : s.ui.reconnecting}
         </div>
       )}
 
@@ -66,7 +68,7 @@ export default function App() {
 
       {net.error && (
         <div className="toast" role="status" onClick={net.clearError}>
-          {net.error}
+          {tError(net.error)}
           <AutoDismiss onDone={net.clearError} key={net.error} />
         </div>
       )}
