@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { current, type Card, type CardColor } from '@uno/shared';
 import { RoomStore } from '../src/rooms.js';
-import { loadSnapshot, saveSnapshotSync, type PersistedRoom } from '../src/persistence.js';
+import { VERSION, loadSnapshot, saveSnapshotSync, type PersistedRoom } from '../src/persistence.js';
 import { config } from '../src/config.js';
 
 const scratch = () => mkdtempSync(path.join(tmpdir(), 'uno-snap-'));
@@ -151,7 +151,7 @@ test('a corrupt or foreign snapshot is ignored rather than fatal', () => {
   assert.equal(loadSnapshot(missing), null);
 
   const truncated = path.join(dir, 'truncated.json');
-  writeFileSync(truncated, '{"version":1,"rooms":[{"state":');
+  writeFileSync(truncated, `{"version":${VERSION},"rooms":[{"state":`);
   assert.equal(loadSnapshot(truncated), null, 'half-written file does not throw');
 
   const foreign = path.join(dir, 'foreign.json');
@@ -162,7 +162,7 @@ test('a corrupt or foreign snapshot is ignored rather than fatal', () => {
   writeFileSync(
     partly,
     JSON.stringify({
-      version: 1,
+      version: VERSION,
       savedAt: Date.now(),
       rooms: [{ state: { code: 'JUNK' } }, ...[]],
     }),

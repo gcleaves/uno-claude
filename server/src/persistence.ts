@@ -11,7 +11,7 @@ import type { GameState } from '@uno/shared';
  */
 
 /** Bumped when the shape changes; an older file is discarded rather than guessed at. */
-const VERSION = 1;
+export const VERSION = 2;
 
 export interface PersistedRoom {
   state: GameState;

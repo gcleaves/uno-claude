@@ -312,14 +312,91 @@ test('UNO can be called, and a silent player can be caught for two cards', () =>
   state.turn = 0;
 
   applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
-  assert.equal(state.unoVulnerable, 'a');
+  assert.deepEqual(state.unoVulnerable, ['a']);
 
   applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng);
   assert.equal(state.players[0]!.hand.length, 3, 'one card plus two penalties');
-  assert.equal(state.unoVulnerable, null);
+  assert.deepEqual(state.unoVulnerable, []);
 
   const again = applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng);
   assert.equal(again.ok, false, 'no double dipping');
+});
+
+test('the catch window survives the next player taking their turn', () => {
+  // Regression: the window used to shut the instant anyone else played, which
+  // against a fast opponent left a fraction of a second to react.
+  const state = gameWith(['a', 'b', 'c']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      // a's second card is unplayable, so their next turn is a draw rather than
+      // a win — otherwise the round ends and the list is cleared regardless.
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'blue', 9)],
+      b: [card('b1', 'number', 'red', 3), card('b2', 'number', 'red', 4)],
+      c: [card('c1', 'number', 'red', 6), card('c2', 'number', 'red', 7)],
+    },
+  });
+  state.turn = 0;
+
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a']);
+
+  applyAction(state, 'b', { type: 'play', cardId: 'b1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a', 'b'], 'a is still catchable after b plays');
+
+  applyAction(state, 'c', { type: 'play', cardId: 'c1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a', 'b', 'c'], 'and everyone else who went quiet');
+
+  // It closes only when they get a turn of their own again.
+  applyAction(state, 'a', { type: 'draw' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['b', 'c'], 'a got away with it; the others have not yet');
+});
+
+test('a repeat turn head-to-head still leaves a window to catch', () => {
+  // Regression: a skip in a two-player game hands the same player another turn,
+  // and the window used to close before the opponent could ever see it.
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'skip', 'red'), card('a2', 'number', 'red', 4)],
+      b: [card('b1', 'number', 'red', 1)],
+    },
+  });
+  state.turn = 0;
+
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.equal(current(state).id, 'a', 'the skip gives them another turn');
+  assert.deepEqual(state.unoVulnerable, ['a'], 'but they are still catchable');
+  assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, true);
+  assert.equal(state.players[0]!.hand.length, 3);
+});
+
+test('drawing closes the window, because they are no longer down to one', () => {
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'skip', 'red'), card('a2', 'number', 'blue', 4)],
+      b: [card('b1', 'number', 'red', 1)],
+    },
+  });
+  state.turn = 0;
+  state.drawPile = [card('d1', 'number', 'green', 9)];
+
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a']);
+
+  // Their repeat turn has nothing playable, so they draw and hold two again.
+  applyAction(state, 'a', { type: 'draw' }, rng);
+  assert.deepEqual(state.unoVulnerable, []);
+  assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
 });
 
 test('calling UNO first makes you safe', () => {
@@ -337,7 +414,7 @@ test('calling UNO first makes you safe', () => {
 
   applyAction(state, 'a', { type: 'sayUno' }, rng);
   applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
-  assert.equal(state.unoVulnerable, null);
+  assert.deepEqual(state.unoVulnerable, []);
   assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
 });
 

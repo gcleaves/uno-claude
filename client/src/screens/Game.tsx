@@ -62,7 +62,7 @@ export function Game({ view, send, onLeave }: Props) {
   const accusedName =
     view.players.find((p) => p.id === reveal?.accusedId)?.name ?? '';
 
-  const canCatch = view.unoVulnerable && view.unoVulnerable !== view.you.id;
+  const canCatch = view.unoVulnerable.some((id) => id !== view.you.id);
   const canCallUno =
     view.phase === 'playing' &&
     !!me &&
@@ -98,7 +98,7 @@ export function Game({ view, send, onLeave }: Props) {
               <span className="opp-name">{p.name}</span>
               <span className="opp-count">{p.handCount}</span>
               {view.rules.scoring && <span className="opp-score">{p.score}</span>}
-              {view.unoVulnerable === p.id && (
+              {view.unoVulnerable.includes(p.id) && (
                 <button className="catch" onClick={() => void send({ type: 'callOut', playerId: p.id })}>
                   {s.ui.catchThem}
                 </button>

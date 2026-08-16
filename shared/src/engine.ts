@@ -47,7 +47,7 @@ export function createGame(code: string, rules: Partial<HouseRules> = {}): GameS
     challengeResult: null,
     hasDrawn: false,
     drawnPlayable: [],
-    unoVulnerable: null,
+    unoVulnerable: [],
     roundWinner: null,
     matchWinner: null,
     log: [],
@@ -98,7 +98,7 @@ export function removePlayer(state: GameState, playerId: string, rng?: Rng): voi
   // Keep the turn pointer aimed at the same player where possible.
   if (idx < state.turn) state.turn--;
   if (state.turn >= state.players.length) state.turn = 0;
-  if (state.unoVulnerable === gone.id) state.unoVulnerable = null;
+  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== gone.id);
   // Whoever inherits the turn must not inherit the leaver's half-finished draw.
   if (idx === state.turn) {
     state.hasDrawn = false;
@@ -144,7 +144,7 @@ export function startRound(state: GameState, rng: Rng, startIndex = 0): ActionRe
   state.challengeResult = null;
   state.hasDrawn = false;
   state.drawnPlayable = [];
-  state.unoVulnerable = null;
+  state.unoVulnerable = [];
   state.roundWinner = null;
   state.phase = 'playing';
   log(state, 'roundStart', undefined, first);
@@ -265,6 +265,9 @@ function playCard(
   if (isWild(card) && !chosenColor) return fail('pickColour');
   if (chosenColor && !COLORS.includes(chosenColor)) return fail('unknownColour');
 
+  // Getting all the way back round to another turn means nobody caught them.
+  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
+
   player.hand.splice(idx, 1);
   state.discardPile.push(card);
   state.activeColor = isWild(card) ? chosenColor! : card.color!;
@@ -281,16 +284,13 @@ function playCard(
     log(state, 'played', { name: player.name }, card);
   }
 
-  // Someone who was vulnerable and got away with it is safe once play moves on.
-  if (state.unoVulnerable && state.unoVulnerable !== player.id) state.unoVulnerable = null;
-
   if (player.hand.length === 0) {
     finishRound(state, player);
     return ok;
   }
 
   if (player.hand.length === 1 && !player.saidUno) {
-    state.unoVulnerable = player.id;
+    state.unoVulnerable = [...state.unoVulnerable, player.id];
   } else if (player.hand.length > 1) {
     player.saidUno = false;
   }
@@ -359,9 +359,9 @@ function swapHands(state: GameState, player: Player, targetPlayerId: string | un
   target.hand = tmp;
   player.saidUno = false;
   target.saidUno = false;
-  if (state.unoVulnerable === player.id || state.unoVulnerable === target.id) {
-    state.unoVulnerable = null;
-  }
+  state.unoVulnerable = state.unoVulnerable.filter(
+    (id) => id !== player.id && id !== target.id,
+  );
   log(state, 'swappedHands', { name: player.name, target: target.name });
 }
 
@@ -373,13 +373,16 @@ function rotateHands(state: GameState): void {
     state.players[i]!.hand = hands[mod(i - state.direction, n)]!;
     state.players[i]!.saidUno = false;
   }
-  state.unoVulnerable = null;
+  state.unoVulnerable = [];
   log(state, 'rotatedHands');
 }
 
 function drawTurn(state: GameState, player: Player, rng: Rng): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
   if (current(state).id !== player.id) return fail('notYourTurn');
+
+  // Drawing puts them back above one card, so there is nothing left to catch.
+  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
 
   if (state.pendingDraw > 0) {
     const count = state.pendingDraw;
@@ -503,7 +506,7 @@ function sayUno(state: GameState, player: Player): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
   if (player.hand.length > 2) return fail('tooManyCardsForUno');
   player.saidUno = true;
-  if (state.unoVulnerable === player.id) state.unoVulnerable = null;
+  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
   log(state, 'callsUno', { name: player.name });
   return ok;
 }
@@ -516,11 +519,11 @@ function callOut(
 ): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
   if (targetId === caller.id) return fail('cannotCatchSelf');
-  if (state.unoVulnerable !== targetId) return fail('nothingToCatch');
+  if (!state.unoVulnerable.includes(targetId)) return fail('nothingToCatch');
   const target = state.players.find((p) => p.id === targetId);
   if (!target) return fail('unknownPlayer');
 
-  state.unoVulnerable = null;
+  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== targetId);
   drawCards(state, target, 2, rng);
   log(state, 'caught', { name: caller.name, target: target.name });
   return ok;
@@ -528,7 +531,7 @@ function callOut(
 
 function finishRound(state: GameState, winner: Player): void {
   state.roundWinner = winner.id;
-  state.unoVulnerable = null;
+  state.unoVulnerable = [];
   state.pendingDraw = 0;
   state.pendingDrawKind = null;
   state.wild4 = null;
@@ -600,10 +603,6 @@ function advance(state: GameState, steps: number): void {
   state.turnSeq++;
   state.hasDrawn = false;
   state.drawnPlayable = [];
-  // If play comes back around to the player who never called UNO, they got away with it.
-  if (state.unoVulnerable && current(state).id === state.unoVulnerable) {
-    state.unoVulnerable = null;
-  }
 }
 
 export function topCard(state: GameState): Card | null {

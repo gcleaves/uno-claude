@@ -89,9 +89,10 @@ function playRound(seed: number, playerCount: number, rules: Partial<HouseRules>
     }
 
     // Someone who forgot to call gets caught by a neighbour.
-    if (state.unoVulnerable && rng() < 0.3) {
-      const catcher = state.players.find((p) => p.id !== state.unoVulnerable);
-      if (catcher) applyAction(state, catcher.id, { type: 'callOut', playerId: state.unoVulnerable }, rng);
+    for (const victim of state.unoVulnerable) {
+      if (rng() >= 0.3) continue;
+      const catcher = state.players.find((p) => p.id !== victim);
+      if (catcher) applyAction(state, catcher.id, { type: 'callOut', playerId: victim }, rng);
     }
   }
 

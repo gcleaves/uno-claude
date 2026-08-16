@@ -199,10 +199,12 @@ export interface GameState {
   /** Card ids the current player is allowed to play after drawing (subset of hand). */
   drawnPlayable: string[];
   /**
-   * Player who just went down to one card and has not yet been safe.
-   * Anyone may catch them until they declare or the turn moves on twice.
+   * Everyone currently down to one card who never said UNO. A list, not one
+   * slot: in an endgame two players are often on their last card at once, and
+   * the earlier one must not be let off just because someone else joined them.
+   * A player leaves the list when they take another turn, draw, or declare.
    */
-  unoVulnerable: string | null;
+  unoVulnerable: string[];
   roundWinner: string | null;
   matchWinner: string | null;
   log: LogEntry[];
@@ -242,7 +244,7 @@ export interface GameView {
   canChallenge: boolean;
   /** Only ever populated for the challenger. */
   challengeResult: GameState['challengeResult'];
-  unoVulnerable: string | null;
+  unoVulnerable: string[];
   roundWinner: string | null;
   matchWinner: string | null;
   log: LogEntry[];

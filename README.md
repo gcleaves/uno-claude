@@ -72,8 +72,14 @@ Configurable by the host in the lobby:
 
 Implemented beyond the basics: reverse acts as a skip head-to-head, the flipped
 starting card takes effect on the first player, the draw pile is reshuffled from
-the discards when it runs out, UNO must be declared and can be caught for a
-2-card penalty, and official scoring (face value / 20 / 50).
+the discards when it runs out, and official scoring (face value / 20 / 50).
+
+**Calling UNO.** Going down to one card without declaring leaves you catchable,
+and anyone can tap Catch for a 2-card penalty. The window stays open until you
+take another turn — not just until the next player moves — because on a phone,
+against a quick opponent, that would be a fraction of a second and the rule would
+be decorative. Several players can be catchable at once, which happens often in
+an endgame.
 
 One deliberate simplification: a wild flipped as the starting card is buried and
 another card is turned instead, since nobody has played yet and there is no one

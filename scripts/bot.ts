@@ -20,6 +20,8 @@ if (!code) {
 const autoStart = flags.includes('--start');
 const url = process.env.UNO_URL ?? 'http://localhost:3001';
 const thinkMs = Number(process.env.BOT_DELAY_MS ?? 900);
+/** How long the bot lets you get away with it before calling you out. */
+const catchMs = Number(process.env.BOT_CATCH_MS ?? 1500);
 
 const socket = io(url, {
   auth: { token: `guest_${randomUUID()}`, name },
@@ -40,6 +42,13 @@ socket.on('connect', () => {
 });
 
 socket.on('state', (view: GameView) => {
+  // Pounce on anyone who forgot to call UNO, whether or not it is our turn —
+  // otherwise a solo tester is never punished and the rule looks broken.
+  const victim = view.unoVulnerable.find((id) => id !== view.you.id);
+  if (victim) {
+    setTimeout(() => socket.emit('game:action', { type: 'callOut', playerId: victim }), catchMs);
+  }
+
   if (view.phase !== 'playing' || !view.you.isYourTurn || acting) return;
   acting = true;
   setTimeout(() => {
