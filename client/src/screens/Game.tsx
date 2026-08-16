@@ -62,7 +62,10 @@ export function Game({ view, send, onLeave }: Props) {
   const accusedName =
     view.players.find((p) => p.id === reveal?.accusedId)?.name ?? '';
 
-  const canCatch = view.unoVulnerable.some((id) => id !== view.you.id);
+  // Strict rules give a very short window, so the banner is the tap target
+  // rather than a hint pointing at a small pill on someone's card chip.
+  const catchTarget = view.unoVulnerable.find((id) => id !== view.you.id);
+  const catchName = view.players.find((p) => p.id === catchTarget)?.name ?? '';
   const canCallUno =
     view.phase === 'playing' &&
     !!me &&
@@ -236,7 +239,14 @@ export function Game({ view, send, onLeave }: Props) {
         </button>
       </footer>
 
-      {canCatch && <div className="catch-banner">{s.ui.catchBanner}</div>}
+      {catchTarget && (
+        <button
+          className="catch-banner"
+          onClick={() => void send({ type: 'callOut', playerId: catchTarget })}
+        >
+          {s.ui.catchBanner(catchName)}
+        </button>
+      )}
 
       {pendingWild && (
         <Modal title={s.ui.pickColour} onClose={() => setPendingWild(null)}>

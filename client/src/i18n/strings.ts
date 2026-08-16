@@ -62,7 +62,7 @@ export interface Strings {
     pass: string;
     uno: string;
     catchThem: string;
-    catchBanner: string;
+    catchBanner: (name: string) => string;
     noCards: string;
     roundOver: string;
     matchOver: string;

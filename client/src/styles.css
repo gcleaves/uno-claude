@@ -789,13 +789,22 @@ input:focus-visible {
   top: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(224, 32, 42, 0.92);
+  width: min(420px, calc(100vw - 24px));
+  background: var(--red);
+  border: none;
   color: #fff;
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 650;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
   z-index: 30;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(224, 32, 42, 0.45);
+  animation: pulse 0.8s ease-in-out infinite;
+}
+.catch-banner:active {
+  transform: translateX(-50%) scale(0.97);
 }
 
 /* ---------------- overlays ---------------- */

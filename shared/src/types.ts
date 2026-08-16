@@ -199,10 +199,10 @@ export interface GameState {
   /** Card ids the current player is allowed to play after drawing (subset of hand). */
   drawnPlayable: string[];
   /**
-   * Everyone currently down to one card who never said UNO. A list, not one
-   * slot: in an endgame two players are often on their last card at once, and
-   * the earlier one must not be let off just because someone else joined them.
-   * A player leaves the list when they take another turn, draw, or declare.
+   * Players down to one card who never said UNO, and can still be caught.
+   * Under the official rule the window shuts as soon as the next player begins
+   * their turn, so in practice this holds at most one player — it stays a list
+   * because it describes who is catchable, not how the window is timed.
    */
   unoVulnerable: string[];
   roundWinner: string | null;

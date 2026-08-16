@@ -265,8 +265,9 @@ function playCard(
   if (isWild(card) && !chosenColor) return fail('pickColour');
   if (chosenColor && !COLORS.includes(chosenColor)) return fail('unknownColour');
 
-  // Getting all the way back round to another turn means nobody caught them.
-  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
+  // This is the next turn beginning, so any outstanding call-out expires now —
+  // before this play can make the player themselves catchable.
+  closeUnoWindow(state);
 
   player.hand.splice(idx, 1);
   state.discardPile.push(card);
@@ -381,8 +382,8 @@ function drawTurn(state: GameState, player: Player, rng: Rng): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
   if (current(state).id !== player.id) return fail('notYourTurn');
 
-  // Drawing puts them back above one card, so there is nothing left to catch.
-  state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
+  // Drawing is beginning a turn, so it closes the window too.
+  closeUnoWindow(state);
 
   if (state.pendingDraw > 0) {
     const count = state.pendingDraw;
@@ -454,6 +455,9 @@ function challengeWild4(state: GameState, player: Player, rng: Rng): ActionResul
   if (!state.wild4 || state.pendingDrawKind !== 'wild4' || state.pendingDraw <= 0) {
     return fail('noChallenge');
   }
+
+  // Challenging is how this player begins their turn.
+  closeUnoWindow(state);
 
   const accused = state.players.find((p) => p.id === state.wild4!.playerId);
   if (!accused) return fail('unknownPlayer');
@@ -631,6 +635,17 @@ export function logEvent(
 /* ------------------------------------------------------------------ *
  * Legality + views
  * ------------------------------------------------------------------ */
+
+/**
+ * Official rule: a player who forgot to call UNO can be caught only "before the
+ * next player begins their turn" — that is, before anyone draws or plays again.
+ * So every turn action shuts the window, whoever takes it. Head-to-head, where a
+ * skip hands the same player another turn, that player's own next action is the
+ * one that closes it.
+ */
+function closeUnoWindow(state: GameState): void {
+  state.unoVulnerable = [];
+}
 
 /** Whether this player may question the Wild Draw Four in front of them. */
 export function canChallenge(state: GameState, player: Player): boolean {

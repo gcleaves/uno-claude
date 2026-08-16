@@ -49,7 +49,7 @@ export const es: Strings = {
     pass: 'Pasar',
     uno: '¡UNO!',
     catchThem: '¡Pillado!',
-    catchBanner: 'Alguien olvidó cantar UNO — pulsa «¡Pillado!»',
+    catchBanner: (name) => `¡${name} no ha cantado UNO — píllalo!`,
     noCards: 'Sin cartas.',
     roundOver: 'Fin de la ronda',
     matchOver: 'Fin de la partida',

@@ -74,12 +74,14 @@ Implemented beyond the basics: reverse acts as a skip head-to-head, the flipped
 starting card takes effect on the first player, the draw pile is reshuffled from
 the discards when it runs out, and official scoring (face value / 20 / 50).
 
-**Calling UNO.** Going down to one card without declaring leaves you catchable,
-and anyone can tap Catch for a 2-card penalty. The window stays open until you
-take another turn — not just until the next player moves — because on a phone,
-against a quick opponent, that would be a fraction of a second and the rule would
-be decorative. Several players can be catchable at once, which happens often in
-an endgame.
+**Calling UNO.** Say it when you play your next-to-last card. Forget, and anyone
+may catch you for a 2-card penalty — but only **before the next player begins
+their turn**, which is the official rule. Any play or draw closes the window, so
+it is genuinely brief. Head-to-head a skip or reverse gives the same player
+another turn, and it is *that* player acting again which closes it.
+
+Because the window is so short, the call-out is a full-width banner naming who to
+catch rather than a small marker on their card, and it is tappable directly.
 
 One deliberate simplification: a wild flipped as the starting card is buried and
 another card is turned instead, since nobody has played yet and there is no one

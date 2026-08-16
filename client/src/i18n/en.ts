@@ -48,7 +48,7 @@ export const en: Strings = {
     pass: 'Pass',
     uno: 'UNO!',
     catchThem: 'Catch!',
-    catchBanner: 'Someone forgot to call UNO — tap “Catch!”',
+    catchBanner: (name) => `${name} did not say UNO — catch them!`,
     noCards: 'No cards.',
     roundOver: 'Round over',
     matchOver: 'Match over',

@@ -21,7 +21,7 @@ const autoStart = flags.includes('--start');
 const url = process.env.UNO_URL ?? 'http://localhost:3001';
 const thinkMs = Number(process.env.BOT_DELAY_MS ?? 900);
 /** How long the bot lets you get away with it before calling you out. */
-const catchMs = Number(process.env.BOT_CATCH_MS ?? 1500);
+const catchMs = Number(process.env.BOT_CATCH_MS ?? 250);
 
 const socket = io(url, {
   auth: { token: `guest_${randomUUID()}`, name },

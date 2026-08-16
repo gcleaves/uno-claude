@@ -49,7 +49,7 @@ export const it: Strings = {
     pass: 'Passa',
     uno: 'UNO!',
     catchThem: 'Preso!',
-    catchBanner: 'Qualcuno ha dimenticato di dire UNO — tocca «Preso!»',
+    catchBanner: (name) => `${name} non ha detto UNO — beccalo!`,
     noCards: 'Nessuna carta.',
     roundOver: 'Round finito',
     matchOver: 'Partita finita',
