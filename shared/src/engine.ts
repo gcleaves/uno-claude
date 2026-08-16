@@ -716,7 +716,6 @@ export function viewFor(state: GameState, playerId: string): GameView {
     // The official rule shows the hand to the challenger alone.
     challengeResult:
       state.challengeResult?.challengerId === playerId ? state.challengeResult : null,
-    unoVulnerable: state.unoVulnerable,
     roundWinner: state.roundWinner,
     matchWinner: state.matchWinner,
     log: state.log,

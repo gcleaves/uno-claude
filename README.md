@@ -80,8 +80,13 @@ their turn**, which is the official rule. Any play or draw closes the window, so
 it is genuinely brief. Head-to-head a skip or reverse gives the same player
 another turn, and it is *that* player acting again which closes it.
 
-Because the window is so short, the call-out is a full-width banner naming who to
-catch rather than a small marker on their card, and it is tappable directly.
+**Nothing tells you when to pounce.** Spotting that someone went quiet on their
+last card is the whole skill, so the game will not flag it — no banner, no marker
+that lights up on the guilty player. Tap any opponent at any time to call UNO on
+them; if they were safe, nothing happens. The server does not even send the
+client who is catchable, so it cannot be read out of devtools either. What you
+get is exactly what you would have at a table: everyone's card count, and a badge
+on whoever was heard to declare.
 
 One deliberate simplification: a wild flipped as the starting card is buried and
 another card is turned instead, since nobody has played yet and there is no one

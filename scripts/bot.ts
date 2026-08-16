@@ -4,6 +4,10 @@
  *   npx tsx scripts/bot.ts ABCD Robot          # join room ABCD
  *   npx tsx scripts/bot.ts ABCD Robot --start  # ...and start the round once seated
  *
+ * Env: BOT_BLUFF=1 leads with Wild Draw Four so you can practise challenging,
+ * BOT_SILENT=1 never calls UNO so you have something to catch,
+ * BOT_DELAY_MS / BOT_CATCH_MS tune how fast it plays and pounces.
+ *
  * It plays the first legal card it holds, draws otherwise, and remembers to
  * call UNO — which makes it a useful opponent for exercising the rules, not a
  * good one.
@@ -42,11 +46,16 @@ socket.on('connect', () => {
 });
 
 socket.on('state', (view: GameView) => {
-  // Pounce on anyone who forgot to call UNO, whether or not it is our turn —
-  // otherwise a solo tester is never punished and the rule looks broken.
-  const victim = view.unoVulnerable.find((id) => id !== view.you.id);
+  // Watch for someone on their last card who was never heard to declare, and
+  // call them out. The server does not say who is catchable — that is for the
+  // players to notice — so this works from the same public information a human
+  // has, and will sometimes accuse a beat too late and be told there is nothing
+  // to catch. That is the risk of calling it, and it is harmless.
+  const victim = view.players.find(
+    (p) => p.id !== view.you.id && p.handCount === 1 && !p.saidUno,
+  );
   if (victim) {
-    setTimeout(() => socket.emit('game:action', { type: 'callOut', playerId: victim }), catchMs);
+    setTimeout(() => socket.emit('game:action', { type: 'callOut', playerId: victim.id }), catchMs);
   }
 
   if (view.phase !== 'playing' || !view.you.isYourTurn || acting) return;
@@ -74,7 +83,10 @@ function takeTurn(view: GameView) {
   }
 
   const card = hand.find((c) => c.id === playableId)!;
-  if (hand.length === 2) socket.emit('game:action', { type: 'sayUno' });
+  // BOT_SILENT=1 makes it forget to declare, so you have something to catch.
+  if (hand.length === 2 && !process.env.BOT_SILENT) {
+    socket.emit('game:action', { type: 'sayUno' });
+  }
 
   socket.emit('game:action', {
     type: 'play',

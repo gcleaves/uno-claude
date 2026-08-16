@@ -62,10 +62,6 @@ export function Game({ view, send, onLeave }: Props) {
   const accusedName =
     view.players.find((p) => p.id === reveal?.accusedId)?.name ?? '';
 
-  // Strict rules give a very short window, so the banner is the tap target
-  // rather than a hint pointing at a small pill on someone's card chip.
-  const catchTarget = view.unoVulnerable.find((id) => id !== view.you.id);
-  const catchName = view.players.find((p) => p.id === catchTarget)?.name ?? '';
   const canCallUno =
     view.phase === 'playing' &&
     !!me &&
@@ -92,7 +88,18 @@ export function Game({ view, send, onLeave }: Props) {
         {others.map((p) => {
           const isTurn = view.players[view.turn]?.id === p.id;
           return (
-            <div key={p.id} className="opp" data-turn={isTurn} data-off={!p.connected}>
+            // Every opponent is tappable, all the time. Enabling it only when
+            // someone is actually catchable would announce the very thing the
+            // other players are supposed to spot for themselves.
+            <button
+              key={p.id}
+              className="opp"
+              data-turn={isTurn}
+              data-off={!p.connected}
+              onClick={() => void send({ type: 'callOut', playerId: p.id })}
+              title={s.ui.callUnoOn(p.name)}
+              aria-label={s.ui.callUnoOn(p.name)}
+            >
               <div className="opp-cards" aria-hidden="true">
                 {Array.from({ length: Math.min(p.handCount, 6) }).map((_, i) => (
                   <span key={i} className="mini-back" style={{ left: `${i * 9}px` }} />
@@ -101,18 +108,15 @@ export function Game({ view, send, onLeave }: Props) {
               <span className="opp-name">{p.name}</span>
               <span className="opp-count">{p.handCount}</span>
               {view.rules.scoring && <span className="opp-score">{p.score}</span>}
-              {view.unoVulnerable.includes(p.id) && (
-                <button className="catch" onClick={() => void send({ type: 'callOut', playerId: p.id })}>
-                  {s.ui.catchThem}
-                </button>
-              )}
+              {/* Declaring UNO is said out loud, so everyone sees it. Its
+                  absence is the thing you have to catch yourself. */}
               {p.saidUno && p.handCount === 1 && <span className="uno-flag">UNO</span>}
               {isTurn && clock && clock.seconds <= 10 && (
                 <span className="opp-clock" data-urgent={clock.urgent}>
                   {clock.seconds}
                 </span>
               )}
-            </div>
+            </button>
           );
         })}
       </section>
@@ -238,15 +242,6 @@ export function Game({ view, send, onLeave }: Props) {
           {s.ui.pass}
         </button>
       </footer>
-
-      {catchTarget && (
-        <button
-          className="catch-banner"
-          onClick={() => void send({ type: 'callOut', playerId: catchTarget })}
-        >
-          {s.ui.catchBanner(catchName)}
-        </button>
-      )}
 
       {pendingWild && (
         <Modal title={s.ui.pickColour} onClose={() => setPendingWild(null)}>

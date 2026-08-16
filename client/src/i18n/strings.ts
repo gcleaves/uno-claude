@@ -61,8 +61,7 @@ export interface Strings {
     draw: string;
     pass: string;
     uno: string;
-    catchThem: string;
-    catchBanner: (name: string) => string;
+    callUnoOn: (name: string) => string;
     noCards: string;
     roundOver: string;
     matchOver: string;

@@ -244,7 +244,13 @@ export interface GameView {
   canChallenge: boolean;
   /** Only ever populated for the challenger. */
   challengeResult: GameState['challengeResult'];
-  unoVulnerable: string[];
+  /*
+   * There is deliberately no `unoVulnerable` here. Spotting that someone went
+   * quiet on their last card is the opponents' job, so the client is not told —
+   * not even in a field it chooses not to draw, which devtools would happily
+   * reveal. What players get is what they would have at a real table: the card
+   * counts, and whether each player was heard to declare.
+   */
   roundWinner: string | null;
   matchWinner: string | null;
   log: LogEntry[];

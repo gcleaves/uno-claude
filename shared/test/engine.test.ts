@@ -496,6 +496,35 @@ test('a view never leaks another player\'s cards', () => {
   assert.equal(JSON.stringify(view).includes(state.players[1]!.hand[0]!.id), false);
 });
 
+test('the view never reveals who is catchable', () => {
+  // Noticing that someone went quiet on their last card is the opponents' job.
+  // Shipping it in the payload would hand it to anyone with devtools open.
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'blue', 9)],
+    },
+  });
+  state.turn = 0;
+
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a'], 'the server still tracks it');
+
+  const view = viewFor(state, 'b');
+  assert.equal('unoVulnerable' in view, false, 'but never sends it');
+  assert.equal(JSON.stringify(view).includes('unoVulnerable'), false);
+
+  // What b legitimately has is the same as at a real table: the card count, and
+  // whether a was heard to declare.
+  const opponent = view.players.find((p) => p.id === 'a')!;
+  assert.equal(opponent.handCount, 1);
+  assert.equal(opponent.saidUno, false);
+});
+
 test('sevens and zeros move hands around when enabled', () => {
   const state = gameWith(['a', 'b', 'c'], { sevenZero: true });
   startRound(state, rng);
