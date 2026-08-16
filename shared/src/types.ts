@@ -75,6 +75,12 @@ export interface GameState {
   players: Player[];
   /** Index into `players` whose turn it is. */
   turn: number;
+  /**
+   * Increments every time the turn moves. Lets callers tell "it is your turn
+   * now" apart from "it was your turn one lap ago", which the index alone
+   * cannot express.
+   */
+  turnSeq: number;
   /** 1 = clockwise (ascending index), -1 = counter-clockwise. */
   direction: 1 | -1;
   drawPile: Card[];
@@ -133,6 +139,14 @@ export interface GameView {
   roundWinner: string | null;
   matchWinner: string | null;
   log: LogEntry[];
+  /**
+   * Milliseconds left for the current player to act before the server forces
+   * the game on, or null when no clock is running. Sent as a duration rather
+   * than a timestamp so it does not depend on the client's clock being right.
+   */
+  turnRemainingMs: number | null;
+  /** How long the running clock started at, for drawing a progress bar. */
+  turnTotalMs: number | null;
   /** The receiving player. */
   you: {
     id: string;

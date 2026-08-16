@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   COLORS,
   describeCard,
@@ -20,6 +20,7 @@ export function Game({ view, send, onLeave }: Props) {
   const [pendingSwap, setPendingSwap] = useState<{ card: Card; color?: CardColor } | null>(null);
   const [showLog, setShowLog] = useState(false);
 
+  const clock = useTurnClock(view.turnRemainingMs, view.turnTotalMs);
   const viewportWidth = useViewportWidth();
   const layout = useMemo(
     () => handLayout(view.you.hand.length, viewportWidth),
@@ -100,6 +101,11 @@ export function Game({ view, send, onLeave }: Props) {
                 </button>
               )}
               {p.saidUno && p.handCount === 1 && <span className="uno-flag">UNO</span>}
+              {isTurn && clock && clock.seconds <= 10 && (
+                <span className="opp-clock" data-urgent={clock.urgent}>
+                  {clock.seconds}
+                </span>
+              )}
             </div>
           );
         })}
@@ -154,6 +160,22 @@ export function Game({ view, send, onLeave }: Props) {
           )
         ) : (
           <span className="muted">Round over</span>
+        )}
+
+        {clock && (
+          <div className="turn-clock" data-urgent={clock.urgent}>
+            <div className="turn-clock-track" aria-hidden="true">
+              <div className="turn-clock-fill" style={{ transform: `scaleX(${clock.fraction})` }} />
+            </div>
+            {clock.seconds <= 10 && (
+              <span className="turn-clock-count">
+                {clock.seconds}s
+                <span className="sr-only">
+                  {yourTurn ? ' left to play before you forfeit the turn' : ' left in their turn'}
+                </span>
+              </span>
+            )}
+          </div>
         )}
       </section>
 
@@ -330,6 +352,38 @@ function rotateToSelf(view: GameView) {
   if (idx === -1) return view.players;
   const n = view.players.length;
   return Array.from({ length: n - 1 }, (_, i) => view.players[(idx + 1 + i) % n]!);
+}
+
+/**
+ * Counts the turn clock down locally between server updates.
+ *
+ * The server sends how long is *left* rather than when the deadline falls, so a
+ * phone with a wrong clock still shows the right number. Each update re-syncs.
+ */
+function useTurnClock(
+  remainingMs: number | null,
+  totalMs: number | null,
+): { seconds: number; fraction: number; urgent: boolean } | null {
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+
+  useEffect(() => {
+    setEndsAt(remainingMs === null ? null : Date.now() + remainingMs);
+  }, [remainingMs]);
+
+  useEffect(() => {
+    if (endsAt === null) return;
+    const id = setInterval(tick, 200);
+    return () => clearInterval(id);
+  }, [endsAt]);
+
+  if (endsAt === null || !totalMs) return null;
+  const left = Math.max(0, endsAt - Date.now());
+  return {
+    seconds: Math.ceil(left / 1000),
+    fraction: left / totalMs,
+    urgent: left <= 5000,
+  };
 }
 
 function useViewportWidth(): number {

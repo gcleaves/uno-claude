@@ -158,7 +158,8 @@ io.on('connection', (socket: Socket) => {
   });
 });
 
-setInterval(() => rooms.sweep(), 3000).unref();
+// Ticks fast enough that a five-second turn clock is not visibly coarse.
+setInterval(() => rooms.sweep(), 500).unref();
 
 http.listen(config.port, () => {
   console.log(`uno server listening on :${config.port} (auth: ${config.authMode})`);

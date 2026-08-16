@@ -39,6 +39,7 @@ export function createGame(code: string, rules: Partial<HouseRules> = {}): GameS
     rules: { ...DEFAULT_RULES, ...rules },
     players: [],
     turn: 0,
+    turnSeq: 0,
     direction: 1,
     drawPile: [],
     discardPile: [],
@@ -137,6 +138,7 @@ export function startRound(state: GameState, rng: Rng, startIndex = 0): ActionRe
   state.activeColor = first.color ?? null;
   state.direction = 1;
   state.turn = startIndex % state.players.length;
+  state.turnSeq++;
   state.pendingDraw = 0;
   state.pendingDrawKind = null;
   state.hasDrawn = false;
@@ -529,6 +531,7 @@ function peek(state: GameState, steps: number): Player {
 
 function advance(state: GameState, steps: number): void {
   state.turn = mod(state.turn + state.direction * steps, state.players.length);
+  state.turnSeq++;
   state.hasDrawn = false;
   state.drawnPlayable = [];
   // If play comes back around to the player who never called UNO, they got away with it.
@@ -544,6 +547,11 @@ export function topCard(state: GameState): Card | null {
 function log(state: GameState, text: string): void {
   state.log.push({ id: state.nextLogId++, text, at: Date.now() });
   if (state.log.length > MAX_LOG) state.log.splice(0, state.log.length - MAX_LOG);
+}
+
+/** Lets the server narrate things the engine has no concept of, like a turn clock. */
+export function logEvent(state: GameState, text: string): void {
+  log(state, text);
 }
 
 /* ------------------------------------------------------------------ *
@@ -605,6 +613,9 @@ export function viewFor(state: GameState, playerId: string): GameView {
     roundWinner: state.roundWinner,
     matchWinner: state.matchWinner,
     log: state.log,
+    // The engine has no clock; the server fills these in when it sends the view.
+    turnRemainingMs: null,
+    turnTotalMs: null,
     you: {
       id: playerId,
       hand: me ? me.hand : [],

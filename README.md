@@ -113,8 +113,36 @@ issuer so the client can configure itself at runtime.
 | `AUTH_MODE`           | `guest` | `guest` or `keycloak`.                                 |
 | `CORS_ORIGIN`         | `*`     | Comma-separated allowed origins.                       |
 | `RECONNECT_GRACE_SEC` | `120`   | How long a disconnected player keeps their seat.       |
-| `AFK_TURN_SEC`        | `20`    | How long before an offline player's turn is auto-played.|
+| `FORCED_ACTION_SEC`   | `5`     | Turn clock when the player has no legal play.          |
+| `TURN_TIMEOUT_SEC`    | `45`    | Turn clock when the player has a real choice.          |
+| `AFK_TURN_SEC`        | `20`    | Turn clock when the player is disconnected.            |
 | `EMPTY_ROOM_TTL_MIN`  | `15`    | How long an empty room lingers before being reclaimed. |
+
+## The turn clock
+
+Nobody gets to stall the table. Whenever the game is waiting on someone, a clock
+runs; when it expires the server plays the turn for them. There are three clocks
+because the situations are genuinely different:
+
+| Situation | Default | Why |
+| --- | --- | --- |
+| No legal play — the only move is to draw | 5s | A formality. Nobody should wait on it. |
+| A real choice of card | 45s | Deciding takes longer than acknowledging. |
+| Disconnected | 20s | No human is thinking, but they may be reconnecting. |
+
+Set any of them to `0` to switch that clock off.
+
+Timing out **draws and forfeits the turn — it never plays a card from your hand.**
+If you are owed a +4 you take it; if you were choosing, you lose the turn and
+keep your cards. Letting the server pick a card would mean it could choose badly
+on your behalf, or dump the exact wild you were saving.
+
+Drawing restarts the clock, so choosing to draw always buys a fresh window to
+decide what to do with the card you got. Unrelated updates — someone else calling
+UNO — do not extend it.
+
+Both the timer bar and the countdown are visible to everyone, so the table can
+see the clock the server is actually enforcing.
 
 ## Deploying with Docker
 

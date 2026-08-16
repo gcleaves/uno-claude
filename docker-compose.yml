@@ -21,6 +21,10 @@ services:
 
       # --- game timing ----------------------------------------------------
       RECONNECT_GRACE_SEC: ${RECONNECT_GRACE_SEC:-120}
+      # Turn clocks: when one expires the server draws and forfeits the turn,
+      # so one player stepping away cannot stall everyone else. 0 disables.
+      FORCED_ACTION_SEC: ${FORCED_ACTION_SEC:-5}
+      TURN_TIMEOUT_SEC: ${TURN_TIMEOUT_SEC:-45}
       AFK_TURN_SEC: ${AFK_TURN_SEC:-20}
       EMPTY_ROOM_TTL_MIN: ${EMPTY_ROOM_TTL_MIN:-15}
     healthcheck:
