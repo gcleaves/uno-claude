@@ -54,6 +54,24 @@ export default function App() {
     setBusy(false);
   };
 
+  // "A game actually started" is the end of the funnel that begins with a
+  // shared link, and it is only visible from the client: a join that never
+  // becomes a session leaves no trace on the server.
+  const dealtFor = useRef<string | null>(null);
+  const phase = net.view?.phase;
+  useEffect(() => {
+    if (!net.code || phase !== 'playing') return;
+    if (dealtFor.current === net.code) return;
+    dealtFor.current = net.code;
+    track('game dealt', { players: net.view?.players.length ?? 0 });
+  }, [net.code, phase, net.view]);
+
+  const leave = () => {
+    // Walking out mid-game is the signal that something was not working.
+    if (phase === 'playing') track('game abandoned', { players: net.view?.players.length ?? 0 });
+    net.leaveRoom();
+  };
+
   const inRoom = net.code && net.view;
 
   return (
@@ -67,9 +85,9 @@ export default function App() {
       {!inRoom ? (
         <Home presetCode={presetCode} onCreate={create} onJoin={join} busy={busy} />
       ) : net.view!.phase === 'lobby' ? (
-        <Lobby view={net.view!} send={net.send} onLeave={net.leaveRoom} />
+        <Lobby view={net.view!} send={net.send} onLeave={leave} />
       ) : (
-        <Game view={net.view!} send={net.send} onLeave={net.leaveRoom} />
+        <Game view={net.view!} send={net.send} onLeave={leave} />
       )}
 
       {net.error && (

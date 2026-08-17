@@ -2,6 +2,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { COLORS, type Action, type Card, type CardColor, type GameView } from '@uno/shared';
 import { CardFace, PALETTE } from '../components/CardFace';
 import { LanguagePicker, useI18n } from '../i18n';
+import { track } from '../analytics';
 
 interface Props {
   view: GameView;
@@ -96,7 +97,11 @@ export function Game({ view, send, onLeave }: Props) {
               className="opp"
               data-turn={isTurn}
               data-off={!p.connected}
-              onClick={() => void send({ type: 'callOut', playerId: p.id })}
+              onClick={() => {
+                void send({ type: 'callOut', playerId: p.id }).then((r) =>
+                  track('catch attempted', { caught: !!(r as { ok?: boolean })?.ok }),
+                );
+              }}
               title={s.ui.callUnoOn(p.name)}
               aria-label={s.ui.callUnoOn(p.name)}
             >
@@ -211,7 +216,13 @@ export function Game({ view, send, onLeave }: Props) {
 
       {view.canChallenge && (
         <div className="challenge-bar">
-          <button className="btn challenge" onClick={() => void send({ type: 'challenge' })}>
+          <button
+            className="btn challenge"
+            onClick={() => {
+              track('challenge used', { pending: view.pendingDraw });
+              void send({ type: 'challenge' });
+            }}
+          >
             {s.ui.challenge}
           </button>
           <small>{s.ui.challengeHint}</small>
@@ -230,7 +241,10 @@ export function Game({ view, send, onLeave }: Props) {
           className="btn uno-btn"
           data-armed={canCallUno}
           disabled={!canCallUno}
-          onClick={() => void send({ type: 'sayUno' })}
+          onClick={() => {
+            track('uno called', { cards: me?.handCount ?? 0 });
+            void send({ type: 'sayUno' });
+          }}
         >
           {s.ui.uno}
         </button>

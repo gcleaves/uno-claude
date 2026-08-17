@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Action, GameView, HouseRules } from '@uno/shared';
 import { LanguagePicker, useI18n } from '../i18n';
+import { track } from '../analytics';
 
 interface Props {
   view: GameView;
@@ -19,9 +20,11 @@ export function Lobby({ view, send, onLeave }: Props) {
     try {
       if (navigator.share) {
         await navigator.share({ text: `${s.ui.gameCode}: ${view.code}`, url: shareUrl });
+        track('invite shared', { method: 'share_sheet' });
         return;
       }
       await navigator.clipboard.writeText(shareUrl);
+      track('invite shared', { method: 'clipboard' });
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -29,8 +32,11 @@ export function Lobby({ view, send, onLeave }: Props) {
     }
   };
 
-  const setRule = <K extends keyof HouseRules>(key: K, value: HouseRules[K]) =>
+  const setRule = <K extends keyof HouseRules>(key: K, value: HouseRules[K]) => {
+    // Which optional rules anyone actually turns on.
+    track('rule changed', { rule: String(key), value: String(value) });
     void send({ type: 'updateRules', rules: { [key]: value } as Partial<HouseRules> });
+  };
 
   return (
     <div className="lobby">

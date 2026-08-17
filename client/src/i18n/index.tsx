@@ -1,9 +1,10 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ErrorCode, LogEntry } from '@uno/shared';
 import { cardName, type Params, type Strings } from './strings';
 import { en } from './en';
 import { es } from './es';
 import { it } from './it';
+import { track } from '../analytics';
 
 export const LOCALES = { en, es, it } as const;
 export type LocaleCode = keyof typeof LOCALES;
@@ -11,15 +12,20 @@ export const LOCALE_CODES = Object.keys(LOCALES) as LocaleCode[];
 
 const STORAGE_KEY = 'uno.locale';
 
-/** Remembered choice first, then the browser's preference, then English. */
-function initialLocale(): LocaleCode {
+/**
+ * Remembered choice first, then the browser's preference, then English. The
+ * source is reported alongside the locale, because "picked Spanish" and "was
+ * given Spanish by their browser" mean different things when deciding whether
+ * the translations are earning their keep.
+ */
+function initialLocale(): { locale: LocaleCode; source: 'stored' | 'browser' | 'default' } {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && saved in LOCALES) return saved as LocaleCode;
+  if (saved && saved in LOCALES) return { locale: saved as LocaleCode, source: 'stored' };
   for (const tag of navigator.languages ?? [navigator.language]) {
     const base = tag.split('-')[0];
-    if (base && base in LOCALES) return base as LocaleCode;
+    if (base && base in LOCALES) return { locale: base as LocaleCode, source: 'browser' };
   }
-  return 'en';
+  return { locale: 'en', source: 'default' };
 }
 
 export interface I18n {
@@ -38,13 +44,30 @@ export interface I18n {
 const I18nContext = createContext<I18n | null>(null);
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<LocaleCode>(initialLocale);
+  const [initial] = useState(initialLocale);
+  const [locale, setLocaleState] = useState<LocaleCode>(initial.locale);
   const s = LOCALES[locale];
 
-  const setLocale = useCallback((next: LocaleCode) => {
-    localStorage.setItem(STORAGE_KEY, next);
-    setLocaleState(next);
-  }, []);
+  // Which language a session starts in, and whether that was a choice. Guarded
+  // because StrictMode runs effects twice in development, which would otherwise
+  // double-count every session.
+  const announced = useRef(false);
+  useEffect(() => {
+    if (announced.current) return;
+    announced.current = true;
+    track('language ready', { locale: initial.locale, source: initial.source });
+  }, [initial]);
+
+  const setLocale = useCallback(
+    (next: LocaleCode) => {
+      localStorage.setItem(STORAGE_KEY, next);
+      setLocaleState((from) => {
+        if (from !== next) track('language changed', { from, to: next });
+        return next;
+      });
+    },
+    [],
+  );
 
   // Keep the document language honest for screen readers and hyphenation.
   useEffect(() => {
