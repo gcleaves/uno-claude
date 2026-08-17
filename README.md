@@ -25,6 +25,13 @@ Then open http://localhost:5173. The Vite dev server also binds to your LAN
 address (printed on startup), so you can open that URL on your phone and play
 against your laptop over Wi-Fi.
 
+You will see `waiting for the API server on :3001 …` for a second or two first.
+Both processes start together, but Vite is ready in about a tenth of a second
+while the API server takes a couple, and a browser tab reconnecting into that
+gap makes Vite print a proxy stack trace that looks like a fault and is not.
+Starting the UI once the API is actually listening avoids the race rather than
+hiding it.
+
 Run the rules engine's test suite — including a soak test that plays thousands of
 randomized rounds across every rule combination:
 

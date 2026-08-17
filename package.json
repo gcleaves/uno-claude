@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
     "dev:server": "npm run dev --workspace server",
-    "dev:client": "npm run dev --workspace client",
+    "dev:client": "node scripts/wait-for-port.mjs 3001 && npm run dev --workspace client",
     "build": "npm run build --workspace client",
     "start": "npm run start --workspace server",
     "typecheck": "tsc -p shared && tsc -p server && tsc -p client && tsc -p scripts",
