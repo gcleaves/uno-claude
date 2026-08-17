@@ -8,6 +8,8 @@ import { config } from './config.js';
 import { resolveIdentity, sanitizeName, type Identity } from './auth.js';
 import { RoomStore } from './rooms.js';
 import { loadSnapshot, saveSnapshot, saveSnapshotSync } from './persistence.js';
+import { ConnectionCounter, RateLimiter, clientIp } from './guard.js';
+import { parseAction, parseRoomCode } from './validate.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(here, '../../client/dist');
@@ -50,12 +52,50 @@ interface SocketData {
   identity: Identity;
   code?: string;
   playerId?: string;
+  ip: string;
+}
+
+const connections = new ConnectionCounter();
+const actionLimit = new RateLimiter(config.actionsPerMinute, 60_000);
+const createLimit = new RateLimiter(config.createsPerMinute, 60_000);
+const joinLimit = new RateLimiter(config.joinsPerMinute, 60_000);
+
+setInterval(() => {
+  const now = Date.now();
+  for (const limiter of [actionLimit, createLimit, joinLimit]) limiter.sweep(now);
+}, 60_000).unref();
+
+/**
+ * Socket.IO does not catch throws inside handlers, so one unexpected error
+ * would take the whole process — and every other game on it — down. Anything
+ * reaching the network gets wrapped.
+ */
+function safely<A extends unknown[]>(
+  label: string,
+  handler: (...args: A) => void,
+): (...args: A) => void {
+  return (...args: A) => {
+    try {
+      handler(...args);
+    } catch (err) {
+      console.error(`error handling ${label}:`, err);
+      const cb = args[args.length - 1];
+      if (typeof cb === 'function') (cb as (r: unknown) => void)({ ok: false, error: 'couldNotJoin' });
+    }
+  };
 }
 
 io.use(async (socket, next) => {
+  const ip = clientIp(socket);
+  if (connections.get(ip) >= config.maxConnectionsPerIp) {
+    next(new Error('Too many connections.'));
+    return;
+  }
   try {
     const identity = await resolveIdentity(socket.handshake.auth ?? {});
-    (socket.data as SocketData).identity = identity;
+    const data = socket.data as SocketData;
+    data.identity = identity;
+    data.ip = ip;
     next();
   } catch (err) {
     next(err instanceof Error ? err : new Error('Authentication failed.'));
@@ -76,6 +116,8 @@ rooms.onChange = broadcast;
 
 io.on('connection', (socket: Socket) => {
   const data = socket.data as SocketData;
+  connections.add(data.ip);
+  socket.on('disconnect', () => connections.remove(data.ip));
 
   const pushSelf = () => {
     if (!data.code || !data.playerId) return;
@@ -90,11 +132,13 @@ io.on('connection', (socket: Socket) => {
     authMode: config.authMode,
   });
 
-  socket.on('room:create', (payload: { name?: string }, cb?: (r: unknown) => void) => {
-    if (config.authMode === 'guest' && payload?.name) {
+  socket.on('room:create', safely('room:create', (payload: { name?: string }, cb?: (r: unknown) => void) => {
+    if (!createLimit.allow(data.ip)) return cb?.({ ok: false, error: 'tooFast' });
+    if (config.authMode === 'guest' && typeof payload?.name === 'string') {
       data.identity.name = sanitizeName(payload.name);
     }
     const room = rooms.create();
+    if (!room) return cb?.({ ok: false, error: 'serverBusy' });
     const joined = rooms.join(room.state.code, data.identity);
     if (!joined.ok) return cb?.({ ok: false, error: joined.error });
 
@@ -103,14 +147,16 @@ io.on('connection', (socket: Socket) => {
     void socket.join(room.state.code);
     cb?.({ ok: true, code: room.state.code, playerId: joined.playerId });
     pushSelf();
-  });
+  }));
 
   socket.on(
     'room:join',
-    (payload: { code?: string; name?: string }, cb?: (r: unknown) => void) => {
-      const code = (payload?.code ?? '').trim().toUpperCase();
-      if (!/^[A-Z0-9]{4}$/.test(code)) return cb?.({ ok: false, error: 'badCode' });
-      if (config.authMode === 'guest' && payload?.name) {
+    safely('room:join', (payload: { code?: string; name?: string }, cb?: (r: unknown) => void) => {
+      // Rate limited so the code space cannot be walked, however long it is.
+      if (!joinLimit.allow(data.ip)) return cb?.({ ok: false, error: 'tooFast' });
+      const code = parseRoomCode(payload?.code, config.roomCodeLength);
+      if (!code) return cb?.({ ok: false, error: 'badCode' });
+      if (config.authMode === 'guest' && typeof payload?.name === 'string') {
         data.identity.name = sanitizeName(payload.name);
       }
 
@@ -122,10 +168,10 @@ io.on('connection', (socket: Socket) => {
       void socket.join(code);
       cb?.({ ok: true, code, playerId: joined.playerId });
       broadcast(code);
-    },
+    }),
   );
 
-  socket.on('room:leave', (_p: unknown, cb?: (r: unknown) => void) => {
+  socket.on('room:leave', safely('room:leave', (_p: unknown, cb?: (r: unknown) => void) => {
     const { code, playerId } = data;
     if (code && playerId) {
       rooms.markDisconnected(code, playerId);
@@ -135,15 +181,19 @@ io.on('connection', (socket: Socket) => {
     data.code = undefined;
     data.playerId = undefined;
     cb?.({ ok: true });
-  });
+  }));
 
-  socket.on('game:action', (action: Action, cb?: (r: ActionResult) => void) => {
+  socket.on('game:action', safely('game:action', (raw: unknown, cb?: (r: ActionResult) => void) => {
     const { code, playerId } = data;
     if (!code || !playerId) return cb?.({ ok: false, error: 'notInGame' });
+    if (!actionLimit.allow(data.ip)) return cb?.({ ok: false, error: 'tooFast' });
+    // Anything that is not a recognised action is refused here, not passed on.
+    const action = parseAction(raw);
+    if (!action) return cb?.({ ok: false, error: 'badAction' });
     const result = rooms.act(code, playerId, action);
     cb?.(result);
     if (!result.ok) pushSelf();
-  });
+  }));
 
   socket.on('disconnect', () => {
     const { code, playerId } = data;

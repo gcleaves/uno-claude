@@ -154,5 +154,8 @@ export const en: Strings = {
     notConnected: () => 'Not connected.',
     noResponse: () => 'The server did not respond.',
     lostSeat: () => 'Lost your seat.',
+    tooFast: () => 'Slow down a moment.',
+    badAction: () => 'That move was not understood.',
+    serverBusy: () => 'The server is full — try again shortly.',
   },
 };

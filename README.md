@@ -114,6 +114,34 @@ accumulated stack.
 Deciding whether to challenge counts as a real decision, so it gets the full turn
 clock rather than the short one used for forced draws.
 
+## Exposed to the internet
+
+Anything reachable from the open internet will be poked at. What is in place:
+
+- **Nothing untrusted reaches the game engine.** Every socket payload is parsed
+  and rejected unless it is a recognised action with the right field types. This
+  is not theoretical tidiness: an unrecognised action type used to return
+  `undefined` from the engine, and reading a property off it threw straight out
+  of the socket handler and killed the process. One message, whole server down,
+  no account needed. Handlers are also wrapped so an unexpected throw can never
+  do that again.
+- **Room codes are six characters** from a 31-character alphabet — about 887
+  million combinations — and join attempts are rate limited. Finding a live room
+  by guessing would take decades. Four characters, as it shipped originally, was
+  under a million and walkable in minutes.
+- **Per-client limits** on connections, actions, room creations and joins, so one
+  source cannot flood the server or exhaust its memory.
+- **A ceiling on total rooms**, so room creation cannot grow the process without
+  bound.
+
+Set `TRUST_PROXY=1` when running behind a reverse proxy, otherwise every
+connection looks like it comes from the proxy and the per-client limits apply to
+everyone at once. Do **not** set it on a directly exposed server: the forwarded
+header is forgeable, and trusting it would let one attacker appear as unlimited
+clients.
+
+None of this decides *who* may play. For that, see below.
+
 ## Authentication
 
 The first version runs open — anyone with a room code can play, identified by a
@@ -153,6 +181,13 @@ issuer so the client can configure itself at runtime.
 | `TURN_TIMEOUT_SEC`    | `45`    | Turn clock when the player has a real choice.          |
 | `AFK_TURN_SEC`        | `20`    | Turn clock when the player is disconnected.            |
 | `EMPTY_ROOM_TTL_MIN`  | `15`    | How long an empty room lingers before being reclaimed. |
+| `TRUST_PROXY`         | `0`     | Read the client address from `X-Forwarded-For`. Only behind a proxy. |
+| `ROOM_CODE_LENGTH`    | `6`     | Characters in a room code.                             |
+| `MAX_CONNECTIONS_PER_IP` | `12` | Live sockets from one address.                         |
+| `MAX_ROOMS`           | `100`   | Rooms on the server at once.                           |
+| `ACTIONS_PER_MINUTE`  | `240`   | Game actions per client.                               |
+| `CREATES_PER_MINUTE`  | `5`     | Room creations per client.                             |
+| `JOINS_PER_MINUTE`    | `20`    | Join attempts per client — the anti-guessing limit.    |
 | `SNAPSHOT_PATH`       | `/data/rooms.json` | Where games are saved. Empty disables persistence. |
 | `SNAPSHOT_INTERVAL_SEC` | `10`  | Background save interval; bounds loss on a crash.      |
 | `RESUME_GRACE_SEC`    | `30`    | Turn clocks are held this long after a restart.        |

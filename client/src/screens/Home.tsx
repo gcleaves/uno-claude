@@ -3,6 +3,14 @@ import { CardFace } from '../components/CardFace';
 import { storedName } from '../net';
 import { LanguagePicker, useI18n } from '../i18n';
 
+/**
+ * The server decides how long codes are and is the authority on validity; the
+ * client only needs a range loose enough not to reject a good code, so that
+ * changing ROOM_CODE_LENGTH on the server needs no client release.
+ */
+export const MAX_CODE = 10;
+const CODE_PATTERN = /^[A-Za-z0-9]{4,10}$/;
+
 interface Props {
   presetCode: string;
   onCreate: (name: string) => Promise<void>;
@@ -16,7 +24,7 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
   const [code, setCode] = useState(presetCode);
 
   const trimmed = name.trim();
-  const canJoin = trimmed.length > 0 && /^[A-Za-z0-9]{4}$/.test(code.trim());
+  const canJoin = trimmed.length > 0 && CODE_PATTERN.test(code.trim());
 
   return (
     <div className="home">
@@ -67,7 +75,7 @@ export function Home({ presetCode, onCreate, onJoin, busy }: Props) {
         <input
           className="code-input"
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 4))}
+          onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, MAX_CODE))}
           placeholder={s.ui.codePlaceholder}
           inputMode="text"
           autoCapitalize="characters"

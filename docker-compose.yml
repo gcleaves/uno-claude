@@ -19,6 +19,18 @@ services:
       # needs no CORS. Set this if you serve the UI from somewhere else.
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
 
+      # --- abuse controls ---------------------------------------------------
+      # Set TRUST_PROXY=1 only when something like Nginx Proxy Manager sits in
+      # front: the forwarded address is forgeable, so trusting it on a directly
+      # exposed server lets one attacker look like unlimited clients.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      ROOM_CODE_LENGTH: ${ROOM_CODE_LENGTH:-6}
+      MAX_CONNECTIONS_PER_IP: ${MAX_CONNECTIONS_PER_IP:-12}
+      MAX_ROOMS: ${MAX_ROOMS:-100}
+      ACTIONS_PER_MINUTE: ${ACTIONS_PER_MINUTE:-240}
+      CREATES_PER_MINUTE: ${CREATES_PER_MINUTE:-5}
+      JOINS_PER_MINUTE: ${JOINS_PER_MINUTE:-20}
+
       # --- game timing ----------------------------------------------------
       RECONNECT_GRACE_SEC: ${RECONNECT_GRACE_SEC:-120}
       # Turn clocks: when one expires the server draws and forfeits the turn,

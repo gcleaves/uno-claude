@@ -157,5 +157,8 @@ export const es: Strings = {
     notConnected: () => 'Sin conexión.',
     noResponse: () => 'El servidor no respondió.',
     lostSeat: () => 'Has perdido tu sitio.',
+    tooFast: () => 'Ve un poco más despacio.',
+    badAction: () => 'No se entendió esa jugada.',
+    serverBusy: () => 'El servidor está lleno — inténtalo en un momento.',
   },
 };

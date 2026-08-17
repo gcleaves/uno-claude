@@ -4,9 +4,16 @@ import { mkdtempSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { current, type Card, type CardColor } from '@uno/shared';
-import { RoomStore } from '../src/rooms.js';
+import { RoomStore, type Room } from '../src/rooms.js';
 import { VERSION, loadSnapshot, saveSnapshotSync, type PersistedRoom } from '../src/persistence.js';
 import { config } from '../src/config.js';
+
+/** The store can refuse when it is at capacity; tests never expect that. */
+function mustCreate(store: RoomStore): Room {
+  const room = store.create();
+  assert.ok(room, 'the room store unexpectedly refused to create a room');
+  return room;
+}
 
 const scratch = () => mkdtempSync(path.join(tmpdir(), 'uno-snap-'));
 
@@ -20,7 +27,7 @@ const card = (id: string, kind: Card['kind'], color?: CardColor, value?: number)
 /** A game in progress with a known board. */
 function liveGame() {
   const store = new RoomStore();
-  const room = store.create();
+  const room = mustCreate(store);
   const code = room.state.code;
   store.join(code, { subject: 'tok-a', name: 'Ada' });
   store.join(code, { subject: 'tok-b', name: 'Bo' });
@@ -130,8 +137,8 @@ test('seats are held from the restart, not from when the snapshot was written', 
 
 test('empty and abandoned rooms are not saved', () => {
   const store = new RoomStore();
-  const empty = store.create();
-  const busy = store.create();
+  const empty = mustCreate(store);
+  const busy = mustCreate(store);
   store.join(busy.state.code, { subject: 'tok-a', name: 'Ada' });
 
   const saved = store.export();
@@ -192,7 +199,7 @@ test('restoring twice does not duplicate a room', () => {
 
 test('the store reports whether anything needs saving', () => {
   const store = new RoomStore();
-  const room = store.create();
+  const room = mustCreate(store);
   store.join(room.state.code, { subject: 'tok-a', name: 'Ada' });
   assert.equal(store.dirty, true);
 

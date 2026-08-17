@@ -59,7 +59,9 @@ export class RoomStore {
     return this.rooms.get(code.toUpperCase());
   }
 
-  create(): Room {
+  /** Null when the server is already holding as many rooms as it will allow. */
+  create(): Room | null {
+    if (this.rooms.size >= config.maxRooms) return null;
     let code = this.newCode();
     while (this.rooms.has(code)) code = this.newCode();
     const room: Room = {
@@ -78,7 +80,9 @@ export class RoomStore {
 
   private newCode(): string {
     let out = '';
-    for (let i = 0; i < 4; i++) out += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+    for (let i = 0; i < config.roomCodeLength; i++) {
+      out += CODE_ALPHABET[randomInt(0, CODE_ALPHABET.length)];
+    }
     return out;
   }
 

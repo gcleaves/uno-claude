@@ -11,6 +11,31 @@ export const config = {
   },
   /** Comma-separated list; '*' in dev. */
   corsOrigin: process.env.CORS_ORIGIN ?? '*',
+
+  /*
+   * Abuse controls. These matter whether or not sign-in is switched on: they
+   * bound what one client can consume, and they are what stops a stranger
+   * guessing their way into a room.
+   */
+
+  /**
+   * Read the client address from X-Forwarded-For. Turn this on only behind a
+   * reverse proxy you control — the header is forgeable, so trusting it on a
+   * directly-exposed server lets one attacker appear as unlimited clients.
+   */
+  trustProxy: process.env.TRUST_PROXY === '1',
+  /** Characters in a room code. 6 makes guessing an active room impractical. */
+  roomCodeLength: Number(process.env.ROOM_CODE_LENGTH ?? 6),
+  /** Live sockets allowed from one address. */
+  maxConnectionsPerIp: Number(process.env.MAX_CONNECTIONS_PER_IP ?? 12),
+  /** Rooms on the server at once, across everyone. */
+  maxRooms: Number(process.env.MAX_ROOMS ?? 100),
+  /** Game actions per client per minute. Generous for play, useless for flooding. */
+  actionsPerMinute: Number(process.env.ACTIONS_PER_MINUTE ?? 240),
+  /** Room creations per client per minute. */
+  createsPerMinute: Number(process.env.CREATES_PER_MINUTE ?? 5),
+  /** Join attempts per client per minute — this is the anti-guessing limit. */
+  joinsPerMinute: Number(process.env.JOINS_PER_MINUTE ?? 20),
   /** Seconds a disconnected player keeps their seat mid-game. */
   reconnectGraceSec: Number(process.env.RECONNECT_GRACE_SEC ?? 120),
 

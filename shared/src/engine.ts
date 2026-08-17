@@ -233,6 +233,11 @@ export function applyAction(
 
     case 'pass':
       return passTurn(state, player);
+
+    default:
+      // Unreachable for a well-typed caller, but the server is fed by the
+      // network: returning a rejection beats throwing out of a socket handler.
+      return fail('notInGame');
   }
 }
 

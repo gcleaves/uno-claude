@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { current, legalPlays, type Card, type CardColor } from '@uno/shared';
-import { RoomStore, turnBudgetMs } from '../src/rooms.js';
+import { RoomStore, turnBudgetMs, type Room } from '../src/rooms.js';
 import { config } from '../src/config.js';
+
+/** The store can refuse when it is at capacity; tests never expect that. */
+function mustCreate(store: RoomStore): Room {
+  const room = store.create();
+  assert.ok(room, 'the room store unexpectedly refused to create a room');
+  return room;
+}
 
 const FORCED = config.forcedActionSec * 1000;
 const CHOICE = config.turnTimeoutSec * 1000;
@@ -18,7 +25,7 @@ const card = (id: string, kind: Card['kind'], color?: CardColor, value?: number)
 /** A started two-player game with a known board. */
 function table() {
   const store = new RoomStore();
-  const room = store.create();
+  const room = mustCreate(store);
   const code = room.state.code;
   store.join(code, { subject: 'a', name: 'Ada' });
   store.join(code, { subject: 'b', name: 'Bo' });
@@ -48,7 +55,7 @@ function table() {
 
 test('no clock runs in the lobby', () => {
   const store = new RoomStore();
-  const room = store.create();
+  const room = mustCreate(store);
   store.join(room.state.code, { subject: 'a', name: 'Ada' });
   assert.equal(turnBudgetMs(room.state), 0);
   store.sweep();

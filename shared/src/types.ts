@@ -146,7 +146,10 @@ export type ErrorCode =
   | 'badCode'
   | 'notConnected'
   | 'noResponse'
-  | 'lostSeat';
+  | 'lostSeat'
+  | 'tooFast'
+  | 'badAction'
+  | 'serverBusy';
 
 export interface GameState {
   code: string;

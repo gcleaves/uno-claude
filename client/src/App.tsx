@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { storedName, useNet } from './net';
 import { useI18n } from './i18n';
+import { MAX_CODE } from './screens/Home';
 import { Home } from './screens/Home';
 import { Lobby } from './screens/Lobby';
 import { Game } from './screens/Game';
@@ -11,7 +12,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [presetCode] = useState(() => {
     const fromUrl = new URLSearchParams(location.search).get('r') ?? '';
-    return fromUrl.toUpperCase().slice(0, 4);
+    return fromUrl.toUpperCase().slice(0, MAX_CODE);
   });
 
   // A refresh, or a phone waking up, should drop you straight back into your seat:
