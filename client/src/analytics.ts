@@ -41,6 +41,20 @@ export function initAnalytics(): void {
   ready = true;
 }
 
+/**
+ * Adopt the identity the server files its events under, so one player is one
+ * person in PostHog. posthog-js links whatever it already sent anonymously to
+ * this id, so the events from before the socket connected are not orphaned.
+ */
+export function identify(id: string): void {
+  if (!ready || !id) return;
+  try {
+    posthog.identify(id);
+  } catch {
+    // Never let analytics interrupt a game.
+  }
+}
+
 export type Props = Record<string, string | number | boolean>;
 
 export function track(event: string, props: Props = {}): void {

@@ -397,7 +397,8 @@ Every event, in full:
 
 | From | Event | Answers |
 | --- | --- | --- |
-| server | `room created`, `room joined` | Is anyone playing? |
+| server | `room created`, `room joined` | Is anyone playing? Joins are real arrivals only. |
+| server | `player reconnected` | How often phones drop and come back |
 | server | `round won`, `match won` | Round length, player count, which rules were on |
 | client | `app opened` | Mobile or desktop layout |
 | client | `language ready`, `language changed` | Is anyone using Spanish or Italian, by choice or by browser default |
@@ -410,6 +411,18 @@ Every event, in full:
 
 `catch attempted` carries whether the catch landed, which is the only way to tell
 whether removing the "someone forgot to say UNO" banner made catching too hard.
+
+**One player is one person.** The browser and the server both file events under
+the same id: the server derives it from the session token and sends it in the
+handshake, because the browser cannot compute it itself — the salt never leaves
+the server. Without that the two halves land under different identities and no
+journey through PostHog joins up, which is subtle enough to look like the data
+is simply wrong.
+
+**Reconnecting is not joining.** A phone waking up re-takes its seat constantly,
+and counting that as an arrival inflates joins to the point where the event
+stream stops resembling what happened at the table. Only a genuinely new player
+produces `room joined`.
 
 **What is deliberately not sent:** player names, room codes, IP addresses, chat,
 or the contents of anyone's hand. Children play this. Events carry counts and

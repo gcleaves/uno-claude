@@ -11,7 +11,7 @@ import { loadSnapshot, saveSnapshot, saveSnapshotSync } from './persistence.js';
 import { ConnectionCounter, RateLimiter, clientIp } from './guard.js';
 import { parseAction, parseRoomCode } from './validate.js';
 import { log } from './logger.js';
-import { initAnalytics, shutdownAnalytics, track } from './analytics.js';
+import { anonId, initAnalytics, shutdownAnalytics, track } from './analytics.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const clientDist = path.resolve(here, '../../client/dist');
@@ -138,6 +138,10 @@ io.on('connection', (socket: Socket) => {
     token: config.authMode === 'guest' ? data.identity.subject : undefined,
     name: data.identity.name,
     authMode: config.authMode,
+    // The browser cannot derive this — the salt is server-side — and without it
+    // the same player is filed under two different identities and no journey
+    // through PostHog joins up.
+    analyticsId: anonId(data.identity.subject),
   });
 
   socket.on('room:create', safely('room:create', (payload: { name?: string }, cb?: (r: unknown) => void) => {
@@ -201,9 +205,14 @@ io.on('connection', (socket: Socket) => {
         ip: data.ip,
         players: joined.room.state.players.length,
       });
-      track(data.identity.subject, 'room joined', {
-        players: joined.room.state.players.length,
-      });
+      // A phone waking up reconnects constantly. Counting that as a join
+      // inflated the number badly and made the event stream stop resembling
+      // what actually happened at the table.
+      track(
+        data.identity.subject,
+        joined.reconnected ? 'player reconnected' : 'room joined',
+        { players: joined.room.state.players.length },
+      );
       cb?.({ ok: true, code, playerId: joined.playerId });
       broadcast(code);
     }),

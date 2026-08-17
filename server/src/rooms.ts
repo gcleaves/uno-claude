@@ -96,7 +96,9 @@ export class RoomStore {
   join(
     code: string,
     identity: { subject: string; name: string },
-  ): { ok: true; room: Room; playerId: string } | { ok: false; error: ErrorCode } {
+  ):
+    | { ok: true; room: Room; playerId: string; reconnected: boolean }
+    | { ok: false; error: ErrorCode } {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'noSuchRoom' };
 
@@ -109,7 +111,8 @@ export class RoomStore {
       room.lastActivity = Date.now();
       syncClock(room, room.lastActivity);
       this.touch(room);
-      return { ok: true, room, playerId: existing.id };
+      // Reattaching a seat is not somebody joining the game.
+      return { ok: true, room, playerId: existing.id, reconnected: true };
     }
 
     const playerId = identity.subject;
@@ -123,7 +126,7 @@ export class RoomStore {
     room.seats.set(identity.subject, playerId);
     room.lastActivity = Date.now();
     this.touch(room);
-    return { ok: true, room, playerId };
+    return { ok: true, room, playerId, reconnected: false };
   }
 
   markDisconnected(code: string, playerId: string): void {

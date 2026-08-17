@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { identify } from './analytics';
 import type { Action, ActionResult, ErrorCode, GameView } from '@uno/shared';
 
 const TOKEN_KEY = 'uno.token';
@@ -64,8 +65,10 @@ export function useNet(): Net {
     });
     socket.on('disconnect', () => setConn('offline'));
     socket.on('connect_error', () => setConn('offline'));
-    socket.on('hello', (payload: { token?: string }) => {
+    socket.on('hello', (payload: { token?: string; analyticsId?: string }) => {
       if (payload.token) localStorage.setItem(TOKEN_KEY, payload.token);
+      // Same identity as the server uses, so a player's events form one story.
+      if (payload.analyticsId) identify(payload.analyticsId);
     });
     socket.on('state', (next: GameView) => setView(next));
 
