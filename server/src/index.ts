@@ -326,11 +326,25 @@ if (persistenceOn) {
   }
 
   if (config.snapshotIntervalSec > 0) {
+    // A snapshot that cannot be written is usually a misconfigured path, which
+    // does not fix itself. Report it once rather than every interval forever.
+    let failing = false;
     setInterval(() => {
       if (!rooms.dirty) return;
-      void saveSnapshot(config.snapshotPath, rooms.export()).catch((err) =>
-        console.warn('snapshot failed:', err),
-      );
+      void saveSnapshot(config.snapshotPath, rooms.export())
+        .then(() => {
+          if (failing) {
+            failing = false;
+            log.info('snapshot.recovered', { detail: config.snapshotPath });
+          }
+        })
+        .catch((err) => {
+          if (failing) return;
+          failing = true;
+          log.error('snapshot.failed', {
+            detail: `${config.snapshotPath}: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        });
     }, config.snapshotIntervalSec * 1000).unref();
   }
 }
