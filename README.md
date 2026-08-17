@@ -198,7 +198,7 @@ issuer so the client can configure itself at runtime.
 | `LOG_DIR`             | `/data/logs` | Where JSONL logs go. Empty disables them.         |
 | `LOG_LEVEL`           | `info`  | `debug` also records every game action.                |
 | `LOG_RETENTION_DAYS`  | `30`    | Days of logs to keep. 0 keeps everything.              |
-| `POSTHOG_KEY`         | —       | Project API key. Empty disables analytics. Build-time for the client. |
+| `POSTHOG_KEY`         | —       | Project API key, both halves. Empty disables analytics. Build-time for the browser. |
 | `POSTHOG_HOST`        | `https://eu.i.posthog.com` | EU Cloud by default.                |
 | `POSTHOG_SALT`        | `uno`   | Salts the hash used for analytics ids.                 |
 | `SNAPSHOT_PATH`       | `/data/rooms.json` | Where games are saved. Empty disables persistence. |
@@ -407,9 +407,21 @@ event looks like this in full:
 
 `POSTHOG_KEY` is a project API key — publishable by design, since it ships in
 the browser bundle — so it is configuration, not a secret. Leaving it empty
-disables analytics on both sides. **It is read at image build time** for the
-browser half, because Vite inlines `VITE_*` variables into the bundle; compose
-passes it through as a build arg, so changing it needs a rebuild, not a restart.
+disables analytics on both sides.
+
+**One variable name covers both halves.** Vite normally reads `.env` from
+`client/` and only exposes `VITE_`-prefixed names, which would have meant a
+second variable that could silently disagree with the server's — set one and
+not the other and you get server-side analytics with a browser reporting
+nothing. Vite is pointed at the repo-root `.env` instead, and the value is
+injected explicitly, so a single `POSTHOG_KEY` in one file configures
+everything. Nothing else from that file reaches the bundle.
+
+**The browser half is baked in at build time**, so changing the key needs
+`docker compose up -d --build`; a restart will keep serving the old bundle.
+Locally, `npm run dev` picks it up from the root `.env` on both sides — the
+server loads that file itself, since Node does not, and real environment
+variables still take precedence over it.
 
 ## Languages
 

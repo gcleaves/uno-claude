@@ -18,8 +18,9 @@ import posthog from 'posthog-js/dist/module.slim.no-external';
  * named events with counts on them.
  */
 
-const KEY = import.meta.env.VITE_POSTHOG_KEY ?? '';
-const HOST = import.meta.env.VITE_POSTHOG_HOST ?? 'https://eu.i.posthog.com';
+// Inlined at build time from the repo-root .env by vite.config.ts.
+const KEY = __POSTHOG_KEY__;
+const HOST = __POSTHOG_HOST__;
 
 let ready = false;
 

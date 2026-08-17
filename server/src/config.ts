@@ -1,3 +1,23 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/**
+ * Node does not read .env on its own, so `npm run dev` would otherwise see none
+ * of the settings the browser half already picks up from the repo-root file.
+ * Loaded from there rather than the working directory, because the workspace
+ * scripts run with cwd set to `server/`.
+ *
+ * Real environment variables win over the file, which is what keeps Docker and
+ * systemd in charge in production. Missing file is normal — the container has
+ * no .env and gets everything from compose.
+ */
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+try {
+  process.loadEnvFile(path.join(repoRoot, '.env'));
+} catch {
+  // No .env, or an unreadable one. Environment variables alone are fine.
+}
+
 export const config = {
   // UNO_SERVER_PORT wins so a dev tool exporting PORT (for Vite) can't hijack the API.
   port: Number(process.env.UNO_SERVER_PORT ?? process.env.PORT ?? 3001),

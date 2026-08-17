@@ -18,13 +18,13 @@ COPY shared/ shared/
 COPY server/ server/
 COPY client/ client/
 
-# Vite inlines VITE_* variables at build time, so the browser's PostHog key has
-# to arrive here rather than as a runtime environment variable — set at run
-# time it would silently produce a bundle with analytics switched off.
-ARG VITE_POSTHOG_KEY=""
-ARG VITE_POSTHOG_HOST="https://eu.i.posthog.com"
-ENV VITE_POSTHOG_KEY=$VITE_POSTHOG_KEY
-ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
+# The browser's key is inlined into the bundle at build time, so it has to
+# arrive as a build argument. Setting it only at run time would silently ship a
+# bundle with analytics switched off. Same variable name as the server uses.
+ARG POSTHOG_KEY=""
+ARG POSTHOG_HOST="https://eu.i.posthog.com"
+ENV POSTHOG_KEY=$POSTHOG_KEY
+ENV POSTHOG_HOST=$POSTHOG_HOST
 
 RUN npm run build
 
