@@ -188,6 +188,12 @@ issuer so the client can configure itself at runtime.
 | `ACTIONS_PER_MINUTE`  | `240`   | Game actions per client.                               |
 | `CREATES_PER_MINUTE`  | `5`     | Room creations per client.                             |
 | `JOINS_PER_MINUTE`    | `20`    | Join attempts per client — the anti-guessing limit.    |
+| `LOG_DIR`             | `/data/logs` | Where JSONL logs go. Empty disables them.         |
+| `LOG_LEVEL`           | `info`  | `debug` also records every game action.                |
+| `LOG_RETENTION_DAYS`  | `30`    | Days of logs to keep. 0 keeps everything.              |
+| `POSTHOG_KEY`         | —       | Project API key. Empty disables analytics. Build-time for the client. |
+| `POSTHOG_HOST`        | `https://eu.i.posthog.com` | EU Cloud by default.                |
+| `POSTHOG_SALT`        | `uno`   | Salts the hash used for analytics ids.                 |
 | `SNAPSHOT_PATH`       | `/data/rooms.json` | Where games are saved. Empty disables persistence. |
 | `SNAPSHOT_INTERVAL_SEC` | `10`  | Background save interval; bounds loss on a crash.      |
 | `RESUME_GRACE_SEC`    | `30`    | Turn clocks are held this long after a restart.        |
@@ -314,6 +320,89 @@ is already a clean serialisation boundary.
 ```bash
 npm run build && npm start
 ```
+
+## Logs
+
+Every notable event is written as one line of JSON to `/data/logs/uno-YYYY-MM-DD.jsonl`,
+rotated daily and pruned after `LOG_RETENTION_DAYS`. The format exists to be
+queried directly:
+
+```bash
+duckdb -c "SELECT event, count(*) FROM read_json_auto('data/logs/*.jsonl', union_by_name=true) GROUP BY 1 ORDER BY 2 DESC"
+```
+
+Two properties make that work, and both are load-bearing rather than tidiness:
+a field means the same thing and has the same type on every line, so DuckDB
+infers one column type instead of a union; and nothing is nested, so every
+column is directly selectable. There is a test that runs real DuckDB against
+real output to keep it that way.
+
+Who won, and how long rounds run:
+
+```sql
+SELECT name AS winner, players, count AS score, round(ms/1000.0) AS secs
+FROM read_json_auto('data/logs/*.jsonl', union_by_name = true)
+WHERE event = 'game.round_end' ORDER BY ts DESC;
+```
+
+Whether anyone is poking at the server — this is the visibility that was missing
+when the decision was made to leave the game open:
+
+```sql
+SELECT ip, event, detail, count(*) AS n
+FROM read_json_auto('data/logs/*.jsonl', union_by_name = true)
+WHERE level = 'warn' GROUP BY ALL ORDER BY n DESC;
+```
+
+`limit.tripped` and `room.join_failed` in volume from one address is someone
+guessing room codes. `action.malformed` is someone sending things the UI never
+sends.
+
+Busiest hours, for capacity or curiosity:
+
+```sql
+SELECT date_trunc('hour', CAST(ts AS TIMESTAMP)) AS hour, count(*) AS actions
+FROM read_json_auto('data/logs/*.jsonl', union_by_name = true)
+WHERE event = 'action' GROUP BY 1 ORDER BY 1;
+```
+
+`LOG_LEVEL=debug` records every individual game action, which is what makes that
+last query interesting; `info` is the default and keeps the files small. Set
+`LOG_DIR=` to switch file logging off entirely. Warnings and errors always also
+go to stdout, so `docker compose logs` shows them.
+
+## Analytics
+
+PostHog, via the **npm SDK** on both sides rather than the HTML snippet. The
+snippet fetches the library from a CDN at run time; this app is bundled and
+served from its own container, so bundling keeps the version pinned in the
+lockfile and removes a third-party request from page load. The client uses
+posthog-js's `slim.no-external` build, which also stops the library lazily
+fetching extra chunks from that CDN — otherwise choosing the SDK would have
+bought nothing.
+
+Game outcomes are sent from the **server**, because that is where the truth is:
+a browser event is lost when a tab closes and can be edited by anyone with
+devtools. The client sends only what the server cannot see, which is whether a
+shared link actually turned into a game.
+
+**What is deliberately not sent:** player names, room codes, IP addresses, chat,
+or the contents of anyone's hand. Children play this. Events carry counts and
+outcomes; the identifier is the browser's own random token, hashed with
+`POSTHOG_SALT` so a PostHog record cannot be matched back to a session token in
+the logs. Autocapture, session recording and surveys are all off. A captured
+event looks like this in full:
+
+```json
+{"event":"round won","distinct_id":"p_8h3sowr5qity",
+ "properties":{"players":3,"score":179,"duration_sec":91,"hand_size":7}}
+```
+
+`POSTHOG_KEY` is a project API key — publishable by design, since it ships in
+the browser bundle — so it is configuration, not a secret. Leaving it empty
+disables analytics on both sides. **It is read at image build time** for the
+browser half, because Vite inlines `VITE_*` variables into the bundle; compose
+passes it through as a build arg, so changing it needs a rebuild, not a restart.
 
 ## Languages
 

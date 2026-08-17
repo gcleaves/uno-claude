@@ -39,6 +39,8 @@ export interface Room {
    */
   turnKey: string;
   lastActivity: number;
+  /** When the current round was dealt, for reporting how long it ran. */
+  roundStartedAt: number;
   /**
    * After a restore, no turn clock runs until this passes. Sockets do not
    * survive a restart, so everyone looks "away" for a moment and would
@@ -72,6 +74,7 @@ export class RoomStore {
       turnTotalMs: null,
       turnKey: '',
       lastActivity: Date.now(),
+      roundStartedAt: Date.now(),
       resumeUntil: null,
     };
     this.rooms.set(code, room);
@@ -146,8 +149,10 @@ export class RoomStore {
   act(code: string, playerId: string, action: Action, now = Date.now()): ActionResult {
     const room = this.get(code);
     if (!room) return { ok: false, error: 'noSuchRoom' };
+    const wasPlaying = room.state.phase === 'playing';
     const result = applyAction(room.state, playerId, action, rng);
     if (result.ok) {
+      if (!wasPlaying && room.state.phase === 'playing') room.roundStartedAt = now;
       room.lastActivity = now;
       syncClock(room, now);
       this.touch(room);
@@ -270,6 +275,7 @@ export class RoomStore {
         turnTotalMs: null,
         turnKey: '',
         lastActivity: now,
+        roundStartedAt: now,
         resumeUntil: config.resumeGraceSec > 0 ? now + config.resumeGraceSec * 1000 : null,
       });
       logEvent(state, 'serverRestarted');

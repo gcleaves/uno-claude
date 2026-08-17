@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { storedName, useNet } from './net';
 import { useI18n } from './i18n';
+import { track } from './analytics';
 import { MAX_CODE } from './screens/Home';
 import { Home } from './screens/Home';
 import { Lobby } from './screens/Lobby';
@@ -39,13 +40,17 @@ export default function App() {
 
   const create = async (name: string) => {
     setBusy(true);
-    await net.createRoom(name);
+    const code = await net.createRoom(name);
+    track('game start attempted', { how: 'create', ok: !!code });
     setBusy(false);
   };
 
   const join = async (code: string, name: string) => {
     setBusy(true);
-    await net.joinRoom(code, name);
+    const ok = await net.joinRoom(code, name);
+    // How often a shared link works first time is the one funnel the server
+    // cannot see, because a failed join never becomes a session.
+    track('game start attempted', { how: 'join', ok });
     setBusy(false);
   };
 

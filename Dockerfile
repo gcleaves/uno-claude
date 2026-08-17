@@ -18,6 +18,14 @@ COPY shared/ shared/
 COPY server/ server/
 COPY client/ client/
 
+# Vite inlines VITE_* variables at build time, so the browser's PostHog key has
+# to arrive here rather than as a runtime environment variable — set at run
+# time it would silently produce a bundle with analytics switched off.
+ARG VITE_POSTHOG_KEY=""
+ARG VITE_POSTHOG_HOST="https://eu.i.posthog.com"
+ENV VITE_POSTHOG_KEY=$VITE_POSTHOG_KEY
+ENV VITE_POSTHOG_HOST=$VITE_POSTHOG_HOST
+
 RUN npm run build
 
 # ---------------------------------------------------------------------------
@@ -44,7 +52,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     UNO_SERVER_PORT=3001 \
-    SNAPSHOT_PATH=/data/rooms.json
+    SNAPSHOT_PATH=/data/rooms.json \
+    LOG_DIR=/data/logs
 
 # Games are snapshotted here so a restart does not end them. Mount a volume at
 # /data to make that survive the container itself, not just the process.

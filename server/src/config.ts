@@ -58,6 +58,27 @@ export const config = {
   /** Minutes an empty room lingers before being reclaimed. */
   emptyRoomTtlMin: Number(process.env.EMPTY_ROOM_TTL_MIN ?? 15),
 
+  /* --- logging and analytics ---------------------------------------- */
+
+  /** Directory for the JSONL logs. Empty disables writing them to disk. */
+  logDir: process.env.LOG_DIR ?? './data/logs',
+  logLevel: (process.env.LOG_LEVEL ?? 'info') as 'debug' | 'info' | 'warn' | 'error',
+  /** Days of logs to keep. 0 keeps everything. */
+  logRetentionDays: Number(process.env.LOG_RETENTION_DAYS ?? 30),
+
+  /**
+   * PostHog project API key. This is a publishable key by design — it is
+   * embedded in the browser bundle — so it is configuration, not a secret.
+   * Leave empty to switch analytics off entirely.
+   */
+  posthogKey: process.env.POSTHOG_KEY ?? '',
+  posthogHost: process.env.POSTHOG_HOST ?? 'https://eu.i.posthog.com',
+  /**
+   * Salts the hash that turns a session token into an analytics id. Set it to
+   * anything stable and private; the default still hashes, it just isn't secret.
+   */
+  posthogSalt: process.env.POSTHOG_SALT ?? 'uno',
+
   /*
    * Games live in memory, so a restart would normally end them. Snapshotting
    * lets a redeploy pass without anyone losing their hand.
