@@ -81,9 +81,18 @@ Implemented beyond the basics: reverse acts as a skip head-to-head, the flipped
 starting card takes effect on the first player, the draw pile is reshuffled from
 the discards when it runs out, and official scoring (face value / 20 / 50).
 
-**Calling UNO.** Say it when you play your next-to-last card. Forget, and anyone
-may catch you for a 2-card penalty — but only **before the next player begins
-their turn**, which is the official rule. Any play or draw closes the window, so
+**Calling UNO.** There are two moments that count, and both are accepted:
+
+- **Holding two cards with a play available** — you say it as you put your
+  second-to-last card down, which is the proper technique.
+- **Holding one card**, right up until somebody else acts.
+
+Anything else is a mistimed press and does nothing at all. Two cards but nothing
+playable is too early: you are about to draw, not to go out. And once the next
+player has moved, it is too late.
+
+Forget entirely, and anyone may catch you for a 2-card penalty — but only
+**before the next player begins their turn**, which is the official rule. Any play or draw closes the window, so
 it is genuinely brief. Head-to-head a skip or reverse gives the same player
 another turn, and it is *that* player acting again which closes it.
 

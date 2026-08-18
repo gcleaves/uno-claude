@@ -511,13 +511,30 @@ function passTurn(state: GameState, player: Player): ActionResult {
   return ok;
 }
 
+/**
+ * There are two correct moments to call UNO, and both count:
+ *
+ *  - Holding two cards with a play available, which is the proper technique —
+ *    you say it as you put your second-to-last card down.
+ *  - Holding one card, up until somebody else acts. That is the same window in
+ *    which you can be caught, so calling it is exactly how you save yourself.
+ *
+ * Anything else is a mistimed press: too early to mean anything, or too late to
+ * matter because the moment has already passed.
+ */
 function sayUno(state: GameState, player: Player): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
-  if (player.hand.length > 2) return fail('tooManyCardsForUno');
   // Pressing it again is not a second declaration. Succeed, but change nothing
   // and say nothing: otherwise an impatient player fills everyone's game log
   // with the same line.
-  if (player.saidUno) return ok;
+  if (player.saidUno) return { ok: true, noop: true };
+  if (player.hand.length > 2) return fail('tooManyCardsForUno');
+
+  // legalPlays is turn-aware, so a non-empty list also means it is their turn.
+  const aboutToGoOut = player.hand.length === 2 && legalPlays(state, player).length > 0;
+  const stillCatchable = player.hand.length === 1 && state.unoVulnerable.includes(player.id);
+  if (!aboutToGoOut && !stillCatchable) return fail('cannotCallUnoNow');
+
   player.saidUno = true;
   state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
   log(state, 'callsUno', { name: player.name });

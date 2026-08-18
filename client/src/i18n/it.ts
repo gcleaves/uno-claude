@@ -145,6 +145,7 @@ export const it: Strings = {
     alreadyDrawn: () => 'Hai già pescato — gioca quella carta o passa.',
     mustDrawFirst: () => 'Devi pescare prima di passare.',
     tooManyCardsForUno: () => 'Hai troppe carte per dire UNO.',
+    cannotCallUnoNow: () => 'Non è il momento di dire UNO.',
     cannotCatchSelf: () => 'Non puoi beccare te stesso.',
     nothingToCatch: () => 'Non c’è nulla da beccare adesso.',
     unknownPlayer: () => 'Giocatore sconosciuto.',

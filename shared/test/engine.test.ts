@@ -434,6 +434,108 @@ test('calling UNO first makes you safe', () => {
   assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
 });
 
+test('calling UNO with two cards and a play available counts', () => {
+  // The proper technique: you say it as you put your second-to-last card down.
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'blue', 9)],
+    },
+  });
+  state.turn = 0;
+
+  assert.equal(applyAction(state, 'a', { type: 'sayUno' }, rng).ok, true);
+  assert.equal(state.players[0]!.saidUno, true);
+
+  // Having declared, going down to one card leaves them safe.
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.deepEqual(state.unoVulnerable, [], 'not catchable — they called it');
+  assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
+});
+
+test('two cards with nothing playable is too early to call', () => {
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    // Nothing red, no wild: they must draw, so they are not about to go out.
+    hands: {
+      a: [card('a1', 'number', 'blue', 1), card('a2', 'number', 'green', 2)],
+      b: [card('b1', 'number', 'blue', 9)],
+    },
+  });
+  state.turn = 0;
+
+  const result = applyAction(state, 'a', { type: 'sayUno' }, rng);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'cannotCallUnoNow');
+  assert.equal(state.players[0]!.saidUno, false);
+});
+
+test('two cards on somebody else\'s turn is too early to call', () => {
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'red', 9)],
+    },
+  });
+  state.turn = 1; // b's turn
+
+  assert.equal(applyAction(state, 'a', { type: 'sayUno' }, rng).error, 'cannotCallUnoNow');
+});
+
+test('calling UNO after playing still counts, until somebody else acts', () => {
+  const state = gameWith(['a', 'b', 'c']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'red', 3)],
+      c: [card('c1', 'number', 'red', 4)],
+    },
+  });
+  state.turn = 0;
+
+  // Play first, say it after — still in time, because nobody has acted yet.
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  assert.deepEqual(state.unoVulnerable, ['a'], 'briefly catchable');
+  assert.equal(applyAction(state, 'a', { type: 'sayUno' }, rng).ok, true);
+  assert.deepEqual(state.unoVulnerable, [], 'saved themselves');
+  assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
+});
+
+test('once the next player acts, it is too late to call', () => {
+  const state = gameWith(['a', 'b', 'c']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'red', 3), card('b2', 'number', 'red', 6)],
+      c: [card('c1', 'number', 'red', 4)],
+    },
+  });
+  state.turn = 0;
+
+  applyAction(state, 'a', { type: 'play', cardId: 'a1' }, rng);
+  applyAction(state, 'b', { type: 'play', cardId: 'b1' }, rng); // the window shuts
+  const result = applyAction(state, 'a', { type: 'sayUno' }, rng);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'cannotCallUnoNow');
+});
+
 test('pressing UNO repeatedly declares once and narrates once', () => {
   // The button is always live, so an impatient player will press it several
   // times. That must not fill everyone's game log with the same line.
@@ -449,10 +551,11 @@ test('pressing UNO repeatedly declares once and narrates once', () => {
   });
   state.turn = 0;
 
-  for (let i = 0; i < 5; i++) {
-    assert.equal(applyAction(state, 'a', { type: 'sayUno' }, rng).ok, true, 'always accepted');
-  }
-  assert.equal(state.players[0]!.saidUno, true);
+  const results = Array.from({ length: 5 }, () =>
+    applyAction(state, 'a', { type: 'sayUno' }, rng),
+  );
+  assert.ok(results.every((r) => r.ok), 'every press is accepted');
+  assert.equal(results.filter((r) => !r.noop).length, 1, 'but only one declared anything');
   assert.equal(
     state.log.filter((l) => l.key === 'callsUno').length,
     1,

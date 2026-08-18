@@ -136,6 +136,7 @@ export type ErrorCode =
   | 'alreadyDrawn'
   | 'mustDrawFirst'
   | 'tooManyCardsForUno'
+  | 'cannotCallUnoNow'
   | 'cannotCatchSelf'
   | 'nothingToCatch'
   | 'unknownPlayer'
@@ -296,4 +297,10 @@ export interface ActionResult {
   error?: ErrorCode;
   /** Values the message needs, e.g. how many cards are owed. */
   errorParams?: Record<string, string | number>;
+  /**
+   * Accepted, but nothing changed — currently only a repeated UNO call. Lets
+   * the caller tell a real declaration from an impatient second press without
+   * racing the state update.
+   */
+  noop?: boolean;
 }

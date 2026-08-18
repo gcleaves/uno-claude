@@ -143,6 +143,7 @@ export const en: Strings = {
     alreadyDrawn: () => 'You have already drawn — play that card or pass.',
     mustDrawFirst: () => 'You must draw before passing.',
     tooManyCardsForUno: () => 'You have too many cards to call UNO.',
+    cannotCallUnoNow: () => 'Not the moment to call UNO.',
     cannotCatchSelf: () => 'You cannot catch yourself.',
     nothingToCatch: () => 'Nothing to catch right now.',
     unknownPlayer: () => 'Unknown player.',

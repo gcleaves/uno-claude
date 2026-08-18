@@ -63,10 +63,15 @@ export function Game({ view, send, onLeave }: Props) {
   const accusedName =
     view.players.find((p) => p.id === reveal?.accusedId)?.name ?? '';
 
+  // Lit at the two moments a call actually counts: about to put down your
+  // second-to-last card, or holding your last one. The button stays clickable
+  // either way — this only drives the styling.
   const canCallUno =
     view.phase === 'playing' &&
     !!me &&
-    (me.handCount === 2 || (me.handCount === 1 && !me.saidUno));
+    !me.saidUno &&
+    ((me.handCount === 2 && view.you.isYourTurn && view.you.playable.length > 0) ||
+      me.handCount === 1);
 
   return (
     <div className="game" data-color={view.activeColor ?? 'none'}>
@@ -243,8 +248,14 @@ export function Game({ view, send, onLeave }: Props) {
           // greying the button out would be a hint that it is the right moment.
           data-armed={canCallUno}
           onClick={() => {
-            if (isRealUnoCall(me)) track('uno called', { cards: 1 });
-            void send({ type: 'sayUno' }, { silent: true });
+            // The server decides whether this is one of the two valid moments,
+            // and tells us whether the press actually declared anything, so a
+            // second press cannot race the state update into a duplicate event.
+            const cards = me?.handCount ?? 0;
+            void send({ type: 'sayUno' }, { silent: true }).then((res) => {
+              const r = res as { ok?: boolean; noop?: boolean };
+              if (r?.ok && !r.noop) track('uno called', { cards });
+            });
           }}
         >
           {s.ui.uno}
@@ -422,19 +433,6 @@ function rotateToSelf(view: GameView) {
  * The server sends how long is *left* rather than when the deadline falls, so a
  * phone with a wrong clock still shows the right number. Each update re-syncs.
  */
-/**
- * Whether pressing UNO right now is an actual declaration worth recording.
- *
- * The button is always live, so most presses are mistimed or repeated and
- * should leave no trace: only the first press, on your last card, changes
- * anything. Note this means declaring early — as you play your second-to-last
- * card, which is the correct technique — records nothing, because at that
- * instant you still hold two.
- */
-export function isRealUnoCall(me?: { handCount: number; saidUno: boolean }): boolean {
-  return !!me && me.handCount === 1 && !me.saidUno;
-}
-
 function useTurnClock(
   remainingMs: number | null,
   totalMs: number | null,

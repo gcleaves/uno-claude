@@ -146,6 +146,7 @@ export const es: Strings = {
     alreadyDrawn: () => 'Ya has robado — juega esa carta o pasa.',
     mustDrawFirst: () => 'Debes robar antes de pasar.',
     tooManyCardsForUno: () => 'Tienes demasiadas cartas para cantar UNO.',
+    cannotCallUnoNow: () => 'No es el momento de cantar UNO.',
     cannotCatchSelf: () => 'No puedes pillarte a ti mismo.',
     nothingToCatch: () => 'No hay nada que pillar ahora mismo.',
     unknownPlayer: () => 'Jugador desconocido.',
