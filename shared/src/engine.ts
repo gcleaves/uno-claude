@@ -514,6 +514,10 @@ function passTurn(state: GameState, player: Player): ActionResult {
 function sayUno(state: GameState, player: Player): ActionResult {
   if (state.phase !== 'playing') return fail('gameNotRunning');
   if (player.hand.length > 2) return fail('tooManyCardsForUno');
+  // Pressing it again is not a second declaration. Succeed, but change nothing
+  // and say nothing: otherwise an impatient player fills everyone's game log
+  // with the same line.
+  if (player.saidUno) return ok;
   player.saidUno = true;
   state.unoVulnerable = state.unoVulnerable.filter((id) => id !== player.id);
   log(state, 'callsUno', { name: player.name });

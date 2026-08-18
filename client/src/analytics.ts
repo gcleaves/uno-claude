@@ -18,9 +18,11 @@ import posthog from 'posthog-js/dist/module.slim.no-external';
  * named events with counts on them.
  */
 
-// Inlined at build time from the repo-root .env by vite.config.ts.
-const KEY = __POSTHOG_KEY__;
-const HOST = __POSTHOG_HOST__;
+// Inlined at build time from the repo-root .env by vite.config.ts. Guarded so
+// importing this module outside a Vite build — a unit test, say — yields
+// "analytics off" rather than a ReferenceError.
+const KEY = typeof __POSTHOG_KEY__ === 'string' ? __POSTHOG_KEY__ : '';
+const HOST = typeof __POSTHOG_HOST__ === 'string' ? __POSTHOG_HOST__ : 'https://eu.i.posthog.com';
 
 let ready = false;
 
@@ -37,6 +39,20 @@ export function initAnalytics(): void {
     // The identifier is a random id in this browser's storage. It is never
     // linked to a name, an email or an account.
     person_profiles: 'identified_only',
+    /*
+     * posthog-js attaches the page URL to every event, and the room code lives
+     * in the query string — so codes were being sent despite nothing in this
+     * file ever passing one. Strip the query and fragment from anything that
+     * carries a URL.
+     */
+    sanitize_properties: (props) => {
+      for (const key of ['$current_url', '$referrer', '$pathname']) {
+        const value = props[key];
+        if (typeof value !== 'string') continue;
+        props[key] = value.split(/[?#]/)[0] ?? value;
+      }
+      return props;
+    },
   });
   ready = true;
 }

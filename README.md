@@ -425,7 +425,10 @@ stream stops resembling what happened at the table. Only a genuinely new player
 produces `room joined`.
 
 **What is deliberately not sent:** player names, room codes, IP addresses, chat,
-or the contents of anyone's hand. Children play this. Events carry counts and
+or the contents of anyone's hand. Note that room codes needed explicit work to
+keep out: posthog-js attaches the page URL to every event, and the code lives in
+the query string, so `sanitize_properties` strips the query and fragment from
+any URL property. Nothing in the app passing a code is not enough. Children play this. Events carry counts and
 outcomes; the identifier is the browser's own random token, hashed with
 `POSTHOG_SALT` so a PostHog record cannot be matched back to a session token in
 the logs. Autocapture, session recording and surveys are all off. A captured

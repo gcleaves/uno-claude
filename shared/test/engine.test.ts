@@ -434,6 +434,42 @@ test('calling UNO first makes you safe', () => {
   assert.equal(applyAction(state, 'b', { type: 'callOut', playerId: 'a' }, rng).ok, false);
 });
 
+test('pressing UNO repeatedly declares once and narrates once', () => {
+  // The button is always live, so an impatient player will press it several
+  // times. That must not fill everyone's game log with the same line.
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  setBoard(state, {
+    top: card('t', 'number', 'red', 5),
+    activeColor: 'red',
+    hands: {
+      a: [card('a1', 'number', 'red', 1), card('a2', 'number', 'red', 2)],
+      b: [card('b1', 'number', 'blue', 9)],
+    },
+  });
+  state.turn = 0;
+
+  for (let i = 0; i < 5; i++) {
+    assert.equal(applyAction(state, 'a', { type: 'sayUno' }, rng).ok, true, 'always accepted');
+  }
+  assert.equal(state.players[0]!.saidUno, true);
+  assert.equal(
+    state.log.filter((l) => l.key === 'callsUno').length,
+    1,
+    'five presses, one announcement',
+  );
+});
+
+test('calling UNO with a full hand is refused, not silently accepted', () => {
+  const state = gameWith(['a', 'b']);
+  startRound(state, rng);
+  assert.equal(state.players[0]!.hand.length, 7);
+  const result = applyAction(state, 'a', { type: 'sayUno' }, rng);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'tooManyCardsForUno');
+  assert.equal(state.players[0]!.saidUno, false);
+});
+
 test('emptying your hand ends the round and scores the other hands', () => {
   const state = gameWith(['a', 'b', 'c'], { scoring: true, targetScore: 500 });
   startRound(state, rng);

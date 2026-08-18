@@ -25,7 +25,8 @@ export interface Net {
   createRoom: (name: string) => Promise<string | null>;
   joinRoom: (code: string, name: string) => Promise<boolean>;
   leaveRoom: () => void;
-  send: (action: Action) => Promise<ActionResult>;
+  /** `silent` suppresses the error toast for actions that may harmlessly not apply. */
+  send: (action: Action, opts?: { silent?: boolean }) => Promise<ActionResult>;
 }
 
 export function useNet(): Net {
@@ -118,13 +119,16 @@ export function useNet(): Net {
     socketRef.current?.emit('room:leave');
   }, []);
 
-  const send = useCallback(async (action: Action): Promise<ActionResult> => {
-    const socket = socketRef.current;
-    if (!socket) return { ok: false, error: 'notConnected' };
-    const res = await emit<ActionResult>(socket, 'game:action', action);
-    if (!res.ok && res.error) setError(res.error);
-    return res;
-  }, []);
+  const send = useCallback(
+    async (action: Action, opts?: { silent?: boolean }): Promise<ActionResult> => {
+      const socket = socketRef.current;
+      if (!socket) return { ok: false, error: 'notConnected' };
+      const res = await emit<ActionResult>(socket, 'game:action', action);
+      if (!res.ok && res.error && !opts?.silent) setError(res.error);
+      return res;
+    },
+    [],
+  );
 
   const clearError = useCallback(() => setError(null), []);
 

@@ -6,7 +6,7 @@ import { track } from '../analytics';
 
 interface Props {
   view: GameView;
-  send: (action: Action) => Promise<unknown>;
+  send: (action: Action, opts?: { silent?: boolean }) => Promise<unknown>;
   onLeave: () => void;
 }
 
@@ -239,11 +239,12 @@ export function Game({ view, send, onLeave }: Props) {
         </button>
         <button
           className="btn uno-btn"
+          // Always live. Calling UNO at the wrong moment is part of the game;
+          // greying the button out would be a hint that it is the right moment.
           data-armed={canCallUno}
-          disabled={!canCallUno}
           onClick={() => {
-            track('uno called', { cards: me?.handCount ?? 0 });
-            void send({ type: 'sayUno' });
+            if (isRealUnoCall(me)) track('uno called', { cards: 1 });
+            void send({ type: 'sayUno' }, { silent: true });
           }}
         >
           {s.ui.uno}
@@ -421,6 +422,19 @@ function rotateToSelf(view: GameView) {
  * The server sends how long is *left* rather than when the deadline falls, so a
  * phone with a wrong clock still shows the right number. Each update re-syncs.
  */
+/**
+ * Whether pressing UNO right now is an actual declaration worth recording.
+ *
+ * The button is always live, so most presses are mistimed or repeated and
+ * should leave no trace: only the first press, on your last card, changes
+ * anything. Note this means declaring early — as you play your second-to-last
+ * card, which is the correct technique — records nothing, because at that
+ * instant you still hold two.
+ */
+export function isRealUnoCall(me?: { handCount: number; saidUno: boolean }): boolean {
+  return !!me && me.handCount === 1 && !me.saidUno;
+}
+
 function useTurnClock(
   remainingMs: number | null,
   totalMs: number | null,
